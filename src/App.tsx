@@ -478,6 +478,10 @@ export default function App() {
         clearTimeout(timer2);
         if (uploadFitMode === 'ai-lora') {
           setAiGeneratedImage('./assets/f250_lora_inpaint.jpg');
+        } else if (overlayBedStyle === 'standard-work') {
+          setAiGeneratedImage('./assets/f250_standard_work.jpg');
+        } else if (overlayBedStyle === 'heritage-wood') {
+          setAiGeneratedImage('./assets/f250_heritage_wood.jpg');
         } else {
           setAiGeneratedImage('./assets/f250_concept_ai.jpg');
         }
