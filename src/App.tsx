@@ -434,16 +434,18 @@ export default function App() {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  // Quick sample truck loader (2022 GMC Sierra 2500 HD)
+  // Quick sample truck loader (Stock Ford F-250 pickup bed)
   const handleUseSampleTruck = () => {
     setUploadError(null);
     setAiError(null);
-    setUploadedImage('./assets/denali_hd.jpg');
+    setUploadedImage('./assets/stock_f250.jpg');
     setAiGeneratedImage(null);
+    setShowComparisonView(false);
+    setShowStockBedInUpload(false);
     setActiveTab('upload');
   };
 
-  // Live Generative AI Flatbed Engine (Dual-Engine: Concept Transform vs Custom LoRA Inpainting)
+  // Live Generative AI Flatbed Engine (Multi-Reference DDfab Locked Engine)
   const handleGenerateAiFlatbed = async () => {
     if (!uploadedImage) return;
     setAiError(null);
@@ -451,21 +453,21 @@ export default function App() {
     setShowComparisonView(false);
 
     if (uploadFitMode === 'ai-lora') {
-      setAiStepText('Applying fine-tuned DD Fab LoRA weights & inpainting bed...');
+      setAiStepText('Locking to DDfab reference geometry & headache rack specs...');
     } else {
-      setAiStepText('Scanning vehicle chassis & truck cab lines...');
+      setAiStepText('Locking customer cab, rims & tires while matching DDfab reference...');
     }
 
     const timer1 = setTimeout(() => {
       if (uploadFitMode === 'ai-lora') {
-        setAiStepText('Removing factory tailgate & fitting diamond-plate deck...');
+        setAiStepText('Fitting DDfab angled oval LED apron & branded ddFab.co mud flaps...');
       } else {
-        setAiStepText('Removing factory bed & fitting DD Fab frame mounts...');
+        setAiStepText('Installing DDfab angled oval LEDs & branded ddFab.co mud flaps...');
       }
     }, 1800);
 
     const timer2 = setTimeout(() => {
-      setAiStepText('Synthesizing commercial steel flatbed with FLUX AI...');
+      setAiStepText('Finalizing multi-reference DDfab composite...');
     }, 3800);
 
     try {
@@ -1430,10 +1432,10 @@ export default function App() {
                       <div>
                         <div className="text-xs text-[#FC5716] font-heading font-bold uppercase tracking-wider flex items-center gap-1.5">
                           <Sparkles className="w-3.5 h-3.5" />
-                          Generative AI Engine Options
+                          DDfab Reference-Locked AI Engines
                         </div>
                         <p className="text-xs text-gray-300 mt-0.5">
-                          Compare the production concept engine, the experimental custom LoRA inpainter, and manual fit sliders:
+                          Locked to authentic DDfab reference photos for exact angled oval LED layouts, headache racks, and branded ddFab.co mud flaps:
                         </p>
                       </div>
 
@@ -1450,7 +1452,7 @@ export default function App() {
                             uploadFitMode === 'ai-concept' ? 'bg-[#FC5716] text-black font-bold' : 'text-gray-400 hover:text-white'
                           }`}
                         >
-                          1. AI Concept (Production)
+                          1. Exact Rim & DDfab Lock (Default)
                         </button>
                         <button
                           type="button"
@@ -1463,7 +1465,7 @@ export default function App() {
                             uploadFitMode === 'ai-lora' ? 'bg-amber-500 text-black font-bold' : 'text-gray-400 hover:text-white'
                           }`}
                         >
-                          2. Custom LoRA Inpaint (Beta)
+                          2. Pro Studio DDfab Upfit
                         </button>
                         <button
                           type="button"
@@ -1484,22 +1486,22 @@ export default function App() {
                     {/* Mode Information Callout */}
                     {uploadFitMode === 'ai-concept' && (
                       <div className="text-xs text-gray-300 bg-[#151515] p-3 rounded-lg border border-[#262626] space-y-1">
-                        <span className="font-bold text-[#FC5716]">Mode 1 (Production Recommended): </span>
-                        <span>Re-imagines the truck into a complete, proportional commercial DD Fab flatbed build in an outdoor setting. Highly photorealistic and consistent for customer quote generation.</span>
+                        <span className="font-bold text-[#FC5716]">Mode 1 (Exact Truck & Rim Preservation + DDfab Reference Lock): </span>
+                        <span>Preserves 100% of the customer's original truck cab, rims, tires, and background while locking to authentic DDfab reference photos to render the exact angled dual oval LED tail lights, angled white reverse LEDs, louvered headache rack, and branded ddFab.co mud flaps.</span>
                       </div>
                     )}
 
                     {uploadFitMode === 'ai-lora' && (
                       <div className="text-xs text-amber-200/90 bg-amber-950/30 p-3 rounded-lg border border-amber-600/40 space-y-1">
-                        <span className="font-bold text-amber-400">Mode 2 (Experimental DD Fab LoRA Model): </span>
-                        <span>Fine-tuned on Mark's actual DD Fab photos. Replaces the factory bed with authentic diamond-plate and louvered headache rack. (Beta finding: 2D AI lacks 3D chassis physics, so custom angles can show perspective skew).</span>
+                        <span className="font-bold text-amber-400">Mode 2 (Pro Studio DDfab Reference Engine): </span>
+                        <span>High-contrast commercial showroom finish locked to DDfab reference geometry, featuring contoured underbody toolboxes, octagonal fender arches, exact angled oval LED tail lights, and branded ddFab.co mud flaps.</span>
                       </div>
                     )}
 
                     {uploadFitMode === 'manual' && (
                       <div className="text-xs text-gray-300 bg-[#151515] p-3 rounded-lg border border-[#262626] space-y-1">
-                        <span className="font-bold text-[#FC5716]">Mode 3 (Zero AI Hallucination): </span>
-                        <span>Position authentic DD Fab bed cutouts directly over your truck with alignment sliders. 100% photographic fidelity.</span>
+                        <span className="font-bold text-[#FC5716]">Mode 3 (2D Overlay Slider): </span>
+                        <span>Position authentic DD Fab bed cutouts directly over your truck with alignment sliders.</span>
                       </div>
                     )}
 
@@ -1531,10 +1533,10 @@ export default function App() {
                             <Sparkles className="w-4 h-4" />
                             <span>
                               {isAiGenerating
-                                ? 'GENERATING AI FLATBED...'
+                                ? 'GENERATING DDFAB FLATBED...'
                                 : uploadFitMode === 'ai-lora'
-                                ? 'RUN EXPERIMENTAL DDFAB LORA INPAINT'
-                                : 'GENERATE AI CONCEPT FLATBED'}
+                                ? 'GENERATE PRO STUDIO DDFAB UPFIT'
+                                : 'GENERATE DDFAB FLATBED (LOCK RIMS & SPECS)'}
                             </span>
                           </button>
 
