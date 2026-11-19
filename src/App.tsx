@@ -612,13 +612,7 @@ export default function App() {
               <span>Studio</span>
             </button>
             <button
-              onClick={() => {
-                if (!uploadedImage) {
-                  fileInputRef.current?.click();
-                } else {
-                  setActiveTab('upload');
-                }
-              }}
+              onClick={() => setActiveTab('upload')}
               className={`px-2.5 sm:px-4 py-1.5 sm:py-2 rounded text-xs sm:text-sm font-semibold transition flex items-center gap-1 sm:gap-1.5 cursor-pointer ${
                 activeTab === 'upload'
                   ? 'bg-[#FC5716] text-black font-bold shadow-md shadow-[#FC5716]/30'
@@ -626,7 +620,7 @@ export default function App() {
               }`}
             >
               <Camera className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              <span>{uploadedImage ? 'My Truck' : 'Upload'}</span>
+              <span>{uploadedImage ? 'My Truck' : 'AI Fitment'}</span>
             </button>
             <input
               type="file"
