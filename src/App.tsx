@@ -473,7 +473,7 @@ export default function App() {
     try {
       // Instant path for sample trucks
       if (uploadedImage.includes('stock_f250')) {
-        await new Promise((r) => setTimeout(r, 2000));
+        await new Promise((r) => setTimeout(r, 1500));
         clearTimeout(timer1);
         clearTimeout(timer2);
         if (uploadFitMode === 'ai-lora') {
@@ -485,6 +485,33 @@ export default function App() {
         } else {
           setAiGeneratedImage('./assets/f250_concept_ai.jpg');
         }
+        setShowStockBedInUpload(false);
+        return;
+      }
+
+      if (uploadedImage.includes('stock_silverado_2500hd')) {
+        await new Promise((r) => setTimeout(r, 1500));
+        clearTimeout(timer1);
+        clearTimeout(timer2);
+        setAiGeneratedImage('./assets/after_silverado_heritage_wood.jpg');
+        setShowStockBedInUpload(false);
+        return;
+      }
+
+      if (uploadedImage.includes('stock_sierra_2500hd')) {
+        await new Promise((r) => setTimeout(r, 1500));
+        clearTimeout(timer1);
+        clearTimeout(timer2);
+        setAiGeneratedImage('./assets/after_sierra_standard_utility.jpg');
+        setShowStockBedInUpload(false);
+        return;
+      }
+
+      if (uploadedImage.includes('stock_ram_2500')) {
+        await new Promise((r) => setTimeout(r, 1500));
+        clearTimeout(timer1);
+        clearTimeout(timer2);
+        setAiGeneratedImage('./assets/after_ram_deluxe_skirted.jpg');
         setShowStockBedInUpload(false);
         return;
       }
@@ -1286,12 +1313,13 @@ export default function App() {
 
               {/* Quick Preset Selector for Easy Testing */}
               <div className="bg-[#171717] p-2.5 rounded-lg border border-[#282828] flex items-center justify-between flex-wrap gap-2 text-xs">
-                <span className="font-semibold text-gray-300">Quick Test Vehicles:</span>
+                <span className="font-semibold text-gray-300">Quick Test Stock Trucks:</span>
                 <div className="flex items-center gap-2 flex-wrap">
                   <button
                     type="button"
                     onClick={() => {
                       setUploadedImage('./assets/stock_f250.jpg');
+                      setOverlayBedStyle('deluxe-skirted');
                       setAiGeneratedImage(null);
                       setShowComparisonView(false);
                       setShowStockBedInUpload(false);
@@ -1302,23 +1330,58 @@ export default function App() {
                         : 'bg-[#222] border-[#333] text-gray-300 hover:text-white'
                     }`}
                   >
-                    Ford F-250 (Stock Factory Bed)
+                    1. Ford F-250 (White)
                   </button>
                   <button
                     type="button"
                     onClick={() => {
-                      setUploadedImage('./assets/denali_hd.jpg');
+                      setUploadedImage('./assets/stock_silverado_2500hd.jpg');
+                      setOverlayBedStyle('heritage-wood');
                       setAiGeneratedImage(null);
                       setShowComparisonView(false);
                       setShowStockBedInUpload(false);
                     }}
                     className={`px-2.5 py-1 rounded transition cursor-pointer border ${
-                      uploadedImage?.includes('denali_hd')
+                      uploadedImage?.includes('stock_silverado_2500hd')
                         ? 'bg-[#FC5716]/20 border-[#FC5716] text-[#FC5716] font-bold'
                         : 'bg-[#222] border-[#333] text-gray-300 hover:text-white'
                     }`}
                   >
-                    GMC Sierra HD (Denali)
+                    2. Chevy Silverado 2500HD (Gray)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUploadedImage('./assets/stock_sierra_2500hd.jpg');
+                      setOverlayBedStyle('standard-work');
+                      setAiGeneratedImage(null);
+                      setShowComparisonView(false);
+                      setShowStockBedInUpload(false);
+                    }}
+                    className={`px-2.5 py-1 rounded transition cursor-pointer border ${
+                      uploadedImage?.includes('stock_sierra_2500hd')
+                        ? 'bg-[#FC5716]/20 border-[#FC5716] text-[#FC5716] font-bold'
+                        : 'bg-[#222] border-[#333] text-gray-300 hover:text-white'
+                    }`}
+                  >
+                    3. GMC Sierra 2500HD Denali (Black)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUploadedImage('./assets/stock_ram_2500.jpg');
+                      setOverlayBedStyle('deluxe-skirted');
+                      setAiGeneratedImage(null);
+                      setShowComparisonView(false);
+                      setShowStockBedInUpload(false);
+                    }}
+                    className={`px-2.5 py-1 rounded transition cursor-pointer border ${
+                      uploadedImage?.includes('stock_ram_2500')
+                        ? 'bg-[#FC5716]/20 border-[#FC5716] text-[#FC5716] font-bold'
+                        : 'bg-[#222] border-[#333] text-gray-300 hover:text-white'
+                    }`}
+                  >
+                    4. Dodge Ram 2500 (Camper Shell)
                   </button>
                 </div>
               </div>
