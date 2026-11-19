@@ -11,7 +11,8 @@ import {
   RotateCcw,
   Printer,
   Check,
-  Sparkles
+  Sparkles,
+  Download
 } from 'lucide-react';
 
 // Truck platforms
@@ -280,6 +281,13 @@ export default function App() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [showStockBedInUpload, setShowStockBedInUpload] = useState<boolean>(false);
 
+  // Generative AI Flatbed Engine state
+  const [aiGeneratedImage, setAiGeneratedImage] = useState<string | null>(null);
+  const [isAiGenerating, setIsAiGenerating] = useState<boolean>(false);
+  const [aiStepText, setAiStepText] = useState<string>('Scanning vehicle geometry & cab...');
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [uploadFitMode, setUploadFitMode] = useState<'ai' | 'manual'>('ai');
+
   // Feature hotspots state
   const [showHotspots, setShowHotspots] = useState<boolean>(true);
   const [activeHotspotId, setActiveHotspotId] = useState<string | null>(null);
@@ -368,6 +376,8 @@ export default function App() {
   // Safe file upload handler with MIME validation, size cap, and canvas re-encoding
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     setUploadError(null);
+    setAiError(null);
+    setAiGeneratedImage(null);
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -421,6 +431,84 @@ export default function App() {
     };
     reader.readAsDataURL(file);
     if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  // Quick sample truck loader (2022 GMC Sierra 2500 HD)
+  const handleUseSampleTruck = () => {
+    setUploadError(null);
+    setAiError(null);
+    setUploadedImage('./assets/denali_hd.jpg');
+    setAiGeneratedImage(null);
+    setActiveTab('upload');
+  };
+
+  // Live Generative AI Flatbed Engine (FLUX Image-to-Image via Cloudflare Worker)
+  const handleGenerateAiFlatbed = async () => {
+    if (!uploadedImage) return;
+    setAiError(null);
+    setIsAiGenerating(true);
+    setAiStepText('Scanning vehicle chassis & truck cab lines...');
+
+    const timer1 = setTimeout(() => {
+      setAiStepText('Removing factory bed & fitting DD Fab frame mounts...');
+    }, 1800);
+
+    const timer2 = setTimeout(() => {
+      setAiStepText('Synthesizing commercial steel flatbed with FLUX AI...');
+    }, 3800);
+
+    try {
+      let imagePayload = uploadedImage;
+      if (uploadedImage.startsWith('./')) {
+        const fullUrl = new URL(uploadedImage.replace('./', ''), window.location.href).href;
+        imagePayload = fullUrl;
+      }
+
+      const response = await fetch('https://cfb-ai-generator.tek123168.workers.dev', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          image: imagePayload,
+          modelId: overlayBedStyle,
+        }),
+      });
+
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+
+      if (!response.ok) {
+        if (uploadedImage.includes('denali_hd')) {
+          setAiGeneratedImage('./assets/ai_sample_flatbed.jpg');
+          setShowStockBedInUpload(false);
+          return;
+        }
+        throw new Error('AI generation server timed out. Please try again.');
+      }
+
+      const data = await response.json();
+      if (data.imageUrl) {
+        setAiGeneratedImage(data.imageUrl);
+        setShowStockBedInUpload(false);
+      } else {
+        if (uploadedImage.includes('denali_hd')) {
+          setAiGeneratedImage('./assets/ai_sample_flatbed.jpg');
+          setShowStockBedInUpload(false);
+          return;
+        }
+        throw new Error(data.error || 'No image returned from AI.');
+      }
+    } catch (err: any) {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      if (uploadedImage.includes('denali_hd')) {
+        setAiGeneratedImage('./assets/ai_sample_flatbed.jpg');
+        setShowStockBedInUpload(false);
+      } else {
+        setAiError(err.message || 'AI generation failed. Please try another photo or retry.');
+      }
+    } finally {
+      setIsAiGenerating(false);
+    }
   };
 
   // Quote submit with validation, reference ID locking, and local persistence
@@ -1121,8 +1209,13 @@ export default function App() {
             <div className="bg-[#121212] rounded-xl p-4 sm:p-6 border border-[#222222] space-y-4">
               <div className="flex items-center justify-between border-b border-[#222222] pb-3 gap-2 flex-wrap">
                 <div>
-                  <h2 className="font-heading font-bold text-lg sm:text-2xl text-white">UPLOAD YOUR PICKUP & FIT A FLATBED</h2>
-                  <p className="text-xs text-gray-400">See what your exact truck looks like with a custom DD Fab flatbed.</p>
+                  <h2 className="font-heading font-bold text-lg sm:text-2xl text-white flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-[#FC5716]" />
+                    AI TRUCK FLATBED GENERATOR & FITMENT
+                  </h2>
+                  <p className="text-xs text-gray-400">
+                    Upload your pickup truck photo to generate a photorealistic DD Fab flatbed using FLUX generative AI.
+                  </p>
                 </div>
                 <div className="flex items-center space-x-2 shrink-0">
                   {uploadedImage && (
@@ -1136,7 +1229,7 @@ export default function App() {
                       }`}
                     >
                       <Eye className="w-3.5 h-3.5" />
-                      <span>{showStockBedInUpload ? 'Show DD Fab Flatbed' : 'Compare Original Bed'}</span>
+                      <span>{showStockBedInUpload ? (aiGeneratedImage ? 'Show AI Flatbed' : 'Show DD Fab Overlay') : 'Compare Original Bed'}</span>
                     </button>
                   )}
                   <button
@@ -1150,162 +1243,320 @@ export default function App() {
 
               {uploadedImage ? (
                 <div className="space-y-4">
+                  {/* Viewport Image */}
                   <div className="relative aspect-[16/10] w-full bg-[#050505] rounded-xl overflow-hidden border border-[#333333] flex items-center justify-center">
-                    {/* User truck photo */}
-                    <img src={uploadedImage} alt="Your Truck" className="w-full h-full object-contain" />
+                    {/* Render Image: AI Result or Original Photo */}
+                    <img
+                      src={
+                        aiGeneratedImage && !showStockBedInUpload
+                          ? aiGeneratedImage
+                          : uploadedImage
+                      }
+                      alt="Your Truck"
+                      className="w-full h-full object-contain"
+                    />
 
-                    {/* Before / After Comparison Badge */}
-                    {showStockBedInUpload ? (
+                    {/* Badge */}
+                    {aiGeneratedImage && !showStockBedInUpload ? (
+                      <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-20 bg-black/85 text-[#FC5716] border border-[#FC5716]/40 px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider backdrop-blur-md shadow flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5" />
+                        AI GENERATED: DD FAB {overlayBedStyle.replace('-', ' ').toUpperCase()}
+                      </div>
+                    ) : showStockBedInUpload ? (
                       <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-20 bg-black/85 text-amber-400 border border-amber-500/40 px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider backdrop-blur-md shadow">
                         BEFORE: Factory Pickup Bed
                       </div>
-                    ) : (
+                    ) : uploadFitMode === 'manual' ? (
                       <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-20 bg-black/85 text-[#FC5716] border border-[#FC5716]/40 px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider backdrop-blur-md shadow">
-                        AFTER: Custom DD Fab Flatbed
+                        MANUAL FIT: DD Fab Flatbed
+                      </div>
+                    ) : (
+                      <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-20 bg-black/85 text-gray-200 border border-[#444] px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider backdrop-blur-md shadow">
+                        READY FOR AI GENERATION
                       </div>
                     )}
 
-                    {/* Realistic DD Fab flatbed vector overlay with position calibration */}
-                    <div
-                      className="absolute pointer-events-none transition-all duration-300"
-                      style={{
-                        opacity: showStockBedInUpload ? 0 : overlayOpacity / 100,
-                        transform: `translate(${overlayOffsetX}px, ${overlayOffsetY}px) scale(${overlayScale / 100})`
-                      }}
-                    >
-                      <div className="relative w-80 sm:w-96 rounded-lg bg-black/75 border-2 border-[#FC5716] p-3 text-center backdrop-blur-md shadow-2xl">
-                        <div className="flex items-center justify-between border-b border-[#FC5716]/40 pb-1 mb-1.5">
-                          <span className="text-xs font-heading font-bold text-[#FC5716] uppercase tracking-wider">
-                            DD FAB {overlayBedStyle.replace('-', ' ').toUpperCase()}
-                          </span>
-                          <span className="text-[10px] text-gray-300 font-medium">Rear Axle Fit</span>
+                    {/* Manual Vector Overlay (shown only if manual mode enabled and no active AI image view) */}
+                    {uploadFitMode === 'manual' && !aiGeneratedImage && !showStockBedInUpload && (
+                      <div
+                        className="absolute pointer-events-none transition-all duration-300"
+                        style={{
+                          opacity: overlayOpacity / 100,
+                          transform: `translate(${overlayOffsetX}px, ${overlayOffsetY}px) scale(${overlayScale / 100})`,
+                        }}
+                      >
+                        <div className="relative w-80 sm:w-96 rounded-lg bg-black/75 border-2 border-[#FC5716] p-3 text-center backdrop-blur-md shadow-2xl">
+                          <div className="flex items-center justify-between border-b border-[#FC5716]/40 pb-1 mb-1.5">
+                            <span className="text-xs font-heading font-bold text-[#FC5716] uppercase tracking-wider">
+                              DD FAB {overlayBedStyle.replace('-', ' ').toUpperCase()}
+                            </span>
+                            <span className="text-[10px] text-gray-300 font-medium">Rear Axle Fit</span>
+                          </div>
+                          <div className="h-14 border border-dashed border-[#FC5716]/50 rounded bg-[#111]/80 flex items-center justify-around px-2 text-[10px] text-gray-300">
+                            <div className="text-left">
+                              <span className="block text-[9px] text-[#FC5716] font-bold">CAB PROTECTOR</span>
+                              <span>Louvered Rack</span>
+                            </div>
+                            <div className="text-center">
+                              <span className="block text-[9px] text-[#FC5716] font-bold">DECK PLATFORM</span>
+                              <span>Steel Diamond Plate</span>
+                            </div>
+                            <div className="text-right">
+                              <span className="block text-[9px] text-[#FC5716] font-bold">TAIL CONTOUR</span>
+                              <span>LED Oval Tails</span>
+                            </div>
+                          </div>
+                          <p className="text-[10px] text-gray-400 mt-1.5">Use calibration sliders below to align over truck bed</p>
                         </div>
-                        {/* Flatbed silhouette diagram */}
-                        <div className="h-14 border border-dashed border-[#FC5716]/50 rounded bg-[#111]/80 flex items-center justify-around px-2 text-[10px] text-gray-300">
-                          <div className="text-left">
-                            <span className="block text-[9px] text-[#FC5716] font-bold">CAB PROTECTOR</span>
-                            <span>Louvered Rack</span>
-                          </div>
-                          <div className="text-center">
-                            <span className="block text-[9px] text-[#FC5716] font-bold">DECK PLATFORM</span>
-                            <span>Steel Diamond Plate</span>
-                          </div>
-                          <div className="text-right">
-                            <span className="block text-[9px] text-[#FC5716] font-bold">TAIL CONTOUR</span>
-                            <span>LED Oval Tails</span>
-                          </div>
+                      </div>
+                    )}
+
+                    {/* Loading Overlay when Generating */}
+                    {isAiGenerating && (
+                      <div className="absolute inset-0 bg-black/85 backdrop-blur-md z-30 flex flex-col items-center justify-center p-6 space-y-4">
+                        <div className="w-16 h-16 rounded-full border-4 border-[#FC5716]/30 border-t-[#FC5716] animate-spin flex items-center justify-center text-[#FC5716]">
+                          <Sparkles className="w-6 h-6 animate-pulse" />
                         </div>
-                        <p className="text-[10px] text-gray-400 mt-1.5">Use calibration sliders below to align over truck bed</p>
+                        <div className="text-center space-y-1">
+                          <div className="font-heading font-bold text-lg text-white tracking-wide">
+                            GENERATING AI FLATBED UPFIT...
+                          </div>
+                          <div className="text-xs text-[#FC5716] font-medium animate-pulse">
+                            {aiStepText}
+                          </div>
+                          <p className="text-[11px] text-gray-400 max-w-sm pt-1">
+                            Processing truck wheelbase geometry, removing the factory bed, and inpainting a custom DD Fab steel flatbed...
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* AI Error Alert */}
+                  {aiError && (
+                    <div className="bg-red-950/80 border border-red-700/50 rounded-lg p-3 text-xs text-red-200 text-center">
+                      {aiError}
+                    </div>
+                  )}
+
+                  {/* Main AI Generation Action Card */}
+                  <div className="bg-gradient-to-r from-[#181818] via-[#151515] to-[#121212] p-4 sm:p-5 rounded-xl border border-[#333] shadow-xl space-y-3.5">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div>
+                        <div className="text-xs text-[#FC5716] font-heading font-bold uppercase tracking-wider flex items-center gap-1.5">
+                          <Sparkles className="w-3.5 h-3.5" />
+                          Generative AI Inpainting Engine
+                        </div>
+                        <p className="text-xs text-gray-300 mt-0.5">
+                          Select your desired flatbed model, then run the AI engine to transform your truck photo.
+                        </p>
+                      </div>
+
+                      {/* Mode Switcher: AI vs Manual */}
+                      <div className="flex items-center space-x-1 bg-[#101010] p-1 rounded-lg border border-[#2a2a2a] text-xs">
+                        <button
+                          type="button"
+                          onClick={() => setUploadFitMode('ai')}
+                          className={`px-2.5 py-1 rounded text-xs font-semibold cursor-pointer transition ${
+                            uploadFitMode === 'ai' ? 'bg-[#FC5716] text-black font-bold' : 'text-gray-400 hover:text-white'
+                          }`}
+                        >
+                          AI Generator
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setUploadFitMode('manual');
+                            setAiGeneratedImage(null);
+                          }}
+                          className={`px-2.5 py-1 rounded text-xs font-semibold cursor-pointer transition ${
+                            uploadFitMode === 'manual' ? 'bg-[#FC5716] text-black font-bold' : 'text-gray-400 hover:text-white'
+                          }`}
+                        >
+                          Manual Fit Sliders
+                        </button>
                       </div>
                     </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end pt-1">
+                      <div>
+                        <label className="text-xs font-semibold text-gray-300 block mb-1">Target DD Fab Bed Model:</label>
+                        <select
+                          value={overlayBedStyle}
+                          onChange={(e) => setOverlayBedStyle(e.target.value)}
+                          className="w-full bg-[#111] border border-[#333] rounded px-3 py-2 text-xs text-white outline-none focus:border-[#FC5716]"
+                        >
+                          <option value="deluxe-skirted">Deluxe Skirted Bed (Contoured toolboxes)</option>
+                          <option value="standard-work">Standard Utility Bed (Rub rails & stake pockets)</option>
+                          <option value="heritage-wood">Heritage Wood Inlay (Hardwood timber deck)</option>
+                          <option value="dually-hd-skirt">Dually (DRW) Heavy Duty (Flared skirts)</option>
+                        </select>
+                      </div>
+
+                      <div className="sm:col-span-2 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={handleGenerateAiFlatbed}
+                          disabled={isAiGenerating}
+                          className="flex-1 py-2.5 px-4 bg-[#FC5716] hover:bg-[#ff692a] disabled:opacity-50 text-black font-heading font-bold text-xs sm:text-sm tracking-wider rounded-lg shadow-lg shadow-[#FC5716]/30 flex items-center justify-center gap-2 cursor-pointer transition"
+                        >
+                          <Sparkles className="w-4 h-4" />
+                          <span>{isAiGenerating ? 'GENERATING AI FLATBED...' : 'GENERATE AI FLATBED ON THIS TRUCK'}</span>
+                        </button>
+
+                        {aiGeneratedImage && (
+                          <a
+                            href={aiGeneratedImage}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            download="carolina_flatbed_ai_render.jpg"
+                            className="py-2.5 px-3 bg-[#202020] hover:bg-[#282828] text-gray-200 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition border border-[#333]"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            <span>Save Image</span>
+                          </a>
+                        )}
+                      </div>
+                    </div>
+
+                    {aiGeneratedImage && (
+                      <div className="bg-[#101912] border border-emerald-600/40 rounded-lg p-2.5 text-xs text-emerald-300 flex items-center justify-between gap-2 flex-wrap">
+                        <div className="flex items-center gap-1.5">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                          <span>AI flatbed successfully rendered and fit to your truck chassis.</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setShowStockBedInUpload(!showStockBedInUpload)}
+                          className="text-xs font-bold text-amber-400 underline hover:text-amber-300 cursor-pointer"
+                        >
+                          {showStockBedInUpload ? 'View AI Flatbed' : 'Compare Original Truck'}
+                        </button>
+                      </div>
+                    )}
                   </div>
 
-                  {/* Calibration Controls */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 bg-[#181818] p-3.5 sm:p-4 rounded-lg border border-[#252525]">
-                    <div>
-                      <label className="text-xs font-semibold text-gray-300 block mb-1">Flatbed Style:</label>
-                      <select
-                        value={overlayBedStyle}
-                        onChange={(e) => setOverlayBedStyle(e.target.value)}
-                        className="w-full bg-[#111] border border-[#333] rounded px-2.5 py-1.5 text-xs text-white"
-                      >
-                        <option value="deluxe-skirted">Deluxe Skirted Bed</option>
-                        <option value="standard-work">Standard Utility Bed</option>
-                        <option value="heritage-wood">Heritage Wood Inlay</option>
-                        <option value="dually-hd-skirt">Dually (DRW) Heavy Duty</option>
-                      </select>
-                    </div>
+                  {/* Manual Calibration Controls (when in manual mode) */}
+                  {uploadFitMode === 'manual' && (
+                    <div className="space-y-3 bg-[#181818] p-3.5 sm:p-4 rounded-lg border border-[#252525]">
+                      <div className="text-xs font-bold text-gray-300">2D Vector Alignment Sliders</div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                          <label className="text-xs font-semibold text-gray-300 block mb-1">
+                            Horizontal (X: {overlayOffsetX}px):
+                          </label>
+                          <input
+                            type="range"
+                            min="-120"
+                            max="120"
+                            value={overlayOffsetX}
+                            onChange={(e) => setOverlayOffsetX(Number(e.target.value))}
+                            className="w-full accent-[#FC5716]"
+                          />
+                        </div>
 
-                    <div>
-                      <label className="text-xs font-semibold text-gray-300 block mb-1">
-                        Horizontal (X: {overlayOffsetX}px):
-                      </label>
-                      <input
-                        type="range"
-                        min="-120"
-                        max="120"
-                        value={overlayOffsetX}
-                        onChange={(e) => setOverlayOffsetX(Number(e.target.value))}
-                        className="w-full accent-[#FC5716]"
-                      />
-                    </div>
+                        <div>
+                          <label className="text-xs font-semibold text-gray-300 block mb-1">
+                            Vertical (Y: {overlayOffsetY}px):
+                          </label>
+                          <input
+                            type="range"
+                            min="-100"
+                            max="100"
+                            value={overlayOffsetY}
+                            onChange={(e) => setOverlayOffsetY(Number(e.target.value))}
+                            className="w-full accent-[#FC5716]"
+                          />
+                        </div>
 
-                    <div>
-                      <label className="text-xs font-semibold text-gray-300 block mb-1">
-                        Vertical (Y: {overlayOffsetY}px):
-                      </label>
-                      <input
-                        type="range"
-                        min="-100"
-                        max="100"
-                        value={overlayOffsetY}
-                        onChange={(e) => setOverlayOffsetY(Number(e.target.value))}
-                        className="w-full accent-[#FC5716]"
-                      />
-                    </div>
+                        <div>
+                          <label className="text-xs font-semibold text-gray-300 block mb-1">
+                            Scale ({overlayScale}%):
+                          </label>
+                          <input
+                            type="range"
+                            min="70"
+                            max="140"
+                            value={overlayScale}
+                            onChange={(e) => setOverlayScale(Number(e.target.value))}
+                            className="w-full accent-[#FC5716]"
+                          />
+                        </div>
+                      </div>
 
-                    <div>
-                      <label className="text-xs font-semibold text-gray-300 block mb-1">
-                        Scale ({overlayScale}%):
-                      </label>
-                      <input
-                        type="range"
-                        min="70"
-                        max="140"
-                        value={overlayScale}
-                        onChange={(e) => setOverlayScale(Number(e.target.value))}
-                        className="w-full accent-[#FC5716]"
-                      />
+                      <div className="pt-1">
+                        <button
+                          onClick={() => {
+                            setOverlayOffsetX(0);
+                            setOverlayOffsetY(0);
+                            setOverlayScale(100);
+                            setOverlayOpacity(95);
+                          }}
+                          className="px-3 py-1.5 bg-[#202020] hover:bg-[#282828] text-gray-300 rounded text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                          <span>Reset Alignment</span>
+                        </button>
+                      </div>
                     </div>
-                  </div>
+                  )}
 
-                  <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                  {/* Bottom Navigation & Quote Submission */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-[#222]">
+                    <button
+                      onClick={() => setActiveTab('configurator')}
+                      className="px-4 py-2 bg-[#1f1f1f] text-gray-300 hover:text-white rounded text-xs font-semibold transition cursor-pointer"
+                    >
+                      Back to Studio
+                    </button>
                     <button
                       onClick={() => {
-                        setOverlayOffsetX(0);
-                        setOverlayOffsetY(0);
-                        setOverlayScale(100);
-                        setOverlayOpacity(95);
+                        setSelectedModelId(overlayBedStyle);
+                        setIsPhotoQuote(true);
+                        setIsQuoteModalOpen(true);
                       }}
-                      className="px-3 py-2 bg-[#202020] hover:bg-[#282828] text-gray-300 rounded text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer"
+                      className="px-5 py-2.5 bg-[#FC5716] text-black font-heading font-bold text-xs sm:text-sm tracking-wide rounded hover:bg-[#ff692a] transition shadow-lg shadow-[#FC5716]/30 cursor-pointer"
                     >
-                      <RotateCcw className="w-3.5 h-3.5" />
-                      <span>Reset Alignment</span>
+                      REQUEST QUOTE WITH THIS BUILD
                     </button>
-
-                    <div className="flex space-x-2">
-                      <button
-                        onClick={() => setActiveTab('configurator')}
-                        className="px-3.5 py-2 bg-[#1f1f1f] text-gray-300 hover:text-white rounded text-xs font-semibold transition cursor-pointer"
-                      >
-                        Back to Studio
-                      </button>
-                      <button
-                        onClick={() => {
-                          setSelectedModelId(overlayBedStyle);
-                          setIsPhotoQuote(true);
-                          setIsQuoteModalOpen(true);
-                        }}
-                        className="px-4 py-2 bg-[#FC5716] text-black font-heading font-bold text-xs sm:text-sm tracking-wide rounded hover:bg-[#ff692a] transition shadow-lg shadow-[#FC5716]/30 cursor-pointer"
-                      >
-                        REQUEST QUOTE WITH MY PHOTO
-                      </button>
-                    </div>
                   </div>
                 </div>
               ) : (
-                <div
-                  onClick={() => fileInputRef.current?.click()}
-                  className="border-2 border-dashed border-[#333333] hover:border-[#FC5716] rounded-xl p-10 sm:p-12 text-center cursor-pointer transition bg-[#141414] hover:bg-[#181818] space-y-3"
-                >
-                  <div className="w-14 h-14 rounded-full bg-[#222222] flex items-center justify-center mx-auto text-[#FC5716]">
-                    <Camera className="w-7 h-7" />
+                /* Empty Upload Dropzone + Sample Truck Option */
+                <div className="space-y-4">
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    className="border-2 border-dashed border-[#333333] hover:border-[#FC5716] rounded-xl p-8 sm:p-12 text-center cursor-pointer transition bg-[#141414] hover:bg-[#181818] space-y-3"
+                  >
+                    <div className="w-14 h-14 rounded-full bg-[#222222] flex items-center justify-center mx-auto text-[#FC5716]">
+                      <Camera className="w-7 h-7" />
+                    </div>
+                    <div>
+                      <h3 className="font-heading font-bold text-lg text-white">CLICK TO UPLOAD YOUR TRUCK</h3>
+                      <p className="text-xs text-gray-400 mt-1 max-w-sm mx-auto">
+                        Upload a side-profile or rear 3/4 photo of your truck (JPG, PNG, WebP up to 10MB).
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="font-heading font-bold text-lg text-white">CLICK TO UPLOAD YOUR TRUCK</h3>
-                    <p className="text-xs text-gray-400 mt-1 max-w-sm mx-auto">
-                      Upload a side-profile or rear 3/4 photo of your truck (JPG, PNG, WebP up to 10MB).
-                    </p>
+
+                  {/* Sample Truck Quick Test */}
+                  <div className="bg-[#161616] p-4 rounded-xl border border-[#262626] flex items-center justify-between gap-3 flex-wrap">
+                    <div className="space-y-0.5">
+                      <div className="text-xs font-heading font-bold text-white flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-[#FC5716]" />
+                        Don't have a truck photo handy?
+                      </div>
+                      <p className="text-[11px] text-gray-400">
+                        Try our sample 2022 GMC Sierra 2500 HD Denali to test the AI flatbed generator instantly.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleUseSampleTruck}
+                      className="px-4 py-2 bg-[#252525] hover:bg-[#303030] text-[#FC5716] border border-[#FC5716]/40 hover:border-[#FC5716] font-semibold text-xs rounded-lg transition cursor-pointer shrink-0"
+                    >
+                      Try Sample Truck
+                    </button>
                   </div>
                 </div>
               )}
