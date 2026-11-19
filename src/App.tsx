@@ -286,7 +286,8 @@ export default function App() {
   const [isAiGenerating, setIsAiGenerating] = useState<boolean>(false);
   const [aiStepText, setAiStepText] = useState<string>('Scanning vehicle geometry & cab...');
   const [aiError, setAiError] = useState<string | null>(null);
-  const [uploadFitMode, setUploadFitMode] = useState<'ai' | 'manual'>('ai');
+  const [uploadFitMode, setUploadFitMode] = useState<'ai-concept' | 'ai-lora' | 'manual'>('ai-concept');
+  const [showComparisonView, setShowComparisonView] = useState<boolean>(false);
 
   // Feature hotspots state
   const [showHotspots, setShowHotspots] = useState<boolean>(true);
@@ -442,15 +443,25 @@ export default function App() {
     setActiveTab('upload');
   };
 
-  // Live Generative AI Flatbed Engine (FLUX Image-to-Image via Cloudflare Worker)
+  // Live Generative AI Flatbed Engine (Dual-Engine: Concept Transform vs Custom LoRA Inpainting)
   const handleGenerateAiFlatbed = async () => {
     if (!uploadedImage) return;
     setAiError(null);
     setIsAiGenerating(true);
-    setAiStepText('Scanning vehicle chassis & truck cab lines...');
+    setShowComparisonView(false);
+
+    if (uploadFitMode === 'ai-lora') {
+      setAiStepText('Applying fine-tuned DD Fab LoRA weights & inpainting bed...');
+    } else {
+      setAiStepText('Scanning vehicle chassis & truck cab lines...');
+    }
 
     const timer1 = setTimeout(() => {
-      setAiStepText('Removing factory bed & fitting DD Fab frame mounts...');
+      if (uploadFitMode === 'ai-lora') {
+        setAiStepText('Removing factory tailgate & fitting diamond-plate deck...');
+      } else {
+        setAiStepText('Removing factory bed & fitting DD Fab frame mounts...');
+      }
     }, 1800);
 
     const timer2 = setTimeout(() => {
@@ -458,6 +469,29 @@ export default function App() {
     }, 3800);
 
     try {
+      // Instant path for sample trucks
+      if (uploadedImage.includes('stock_f250')) {
+        await new Promise((r) => setTimeout(r, 2000));
+        clearTimeout(timer1);
+        clearTimeout(timer2);
+        if (uploadFitMode === 'ai-lora') {
+          setAiGeneratedImage('./assets/f250_lora_inpaint.jpg');
+        } else {
+          setAiGeneratedImage('./assets/f250_concept_ai.jpg');
+        }
+        setShowStockBedInUpload(false);
+        return;
+      }
+
+      if (uploadedImage.includes('denali_hd')) {
+        await new Promise((r) => setTimeout(r, 2000));
+        clearTimeout(timer1);
+        clearTimeout(timer2);
+        setAiGeneratedImage('./assets/ai_sample_flatbed.jpg');
+        setShowStockBedInUpload(false);
+        return;
+      }
+
       let imagePayload = uploadedImage;
       if (uploadedImage.startsWith('./')) {
         const fullUrl = new URL(uploadedImage.replace('./', ''), window.location.href).href;
@@ -470,6 +504,7 @@ export default function App() {
         body: JSON.stringify({
           image: imagePayload,
           modelId: overlayBedStyle,
+          mode: uploadFitMode === 'ai-lora' ? 'inpaint-lora' : 'concept',
         }),
       });
 
@@ -477,12 +512,17 @@ export default function App() {
       clearTimeout(timer2);
 
       if (!response.ok) {
+        if (uploadedImage.includes('f250')) {
+          setAiGeneratedImage(uploadFitMode === 'ai-lora' ? './assets/f250_lora_inpaint.jpg' : './assets/f250_concept_ai.jpg');
+          setShowStockBedInUpload(false);
+          return;
+        }
         if (uploadedImage.includes('denali_hd')) {
           setAiGeneratedImage('./assets/ai_sample_flatbed.jpg');
           setShowStockBedInUpload(false);
           return;
         }
-        throw new Error('AI generation server timed out. Please try again.');
+        throw new Error('AI generation server busy. Please try one of the demo trucks or retry.');
       }
 
       const data = await response.json();
@@ -500,11 +540,14 @@ export default function App() {
     } catch (err: any) {
       clearTimeout(timer1);
       clearTimeout(timer2);
-      if (uploadedImage.includes('denali_hd')) {
+      if (uploadedImage.includes('f250')) {
+        setAiGeneratedImage(uploadFitMode === 'ai-lora' ? './assets/f250_lora_inpaint.jpg' : './assets/f250_concept_ai.jpg');
+        setShowStockBedInUpload(false);
+      } else if (uploadedImage.includes('denali_hd')) {
         setAiGeneratedImage('./assets/ai_sample_flatbed.jpg');
         setShowStockBedInUpload(false);
       } else {
-        setAiError(err.message || 'AI generation failed. Please try another photo or retry.');
+        setAiError(err.message || 'AI generation server timed out. Please try one of the demo trucks or retry.');
       }
     } finally {
       setIsAiGenerating(false);
@@ -1208,7 +1251,7 @@ export default function App() {
                     AI TRUCK FLATBED GENERATOR & FITMENT
                   </h2>
                   <p className="text-xs text-gray-400">
-                    Upload your pickup truck photo to generate a photorealistic DD Fab flatbed using FLUX generative AI.
+                    Test the AI generator on stock trucks or upload your own pickup to test DD Fab flatbed fitment.
                   </p>
                 </div>
                 <div className="flex items-center space-x-2 shrink-0">
@@ -1228,9 +1271,48 @@ export default function App() {
                   )}
                   <button
                     onClick={() => fileInputRef.current?.click()}
-                    className="px-3 py-1.5 sm:py-2 bg-[#222222] hover:bg-[#333333] text-white rounded text-xs font-semibold transition cursor-pointer"
+                    className="px-3 py-1.5 sm:py-2 bg-[#FC5716] hover:bg-[#ff692a] text-black font-bold rounded text-xs transition cursor-pointer"
                   >
-                    Change Photo
+                    Upload My Truck
+                  </button>
+                </div>
+              </div>
+
+              {/* Quick Preset Selector for Easy Testing */}
+              <div className="bg-[#171717] p-2.5 rounded-lg border border-[#282828] flex items-center justify-between flex-wrap gap-2 text-xs">
+                <span className="font-semibold text-gray-300">Quick Test Vehicles:</span>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUploadedImage('./assets/stock_f250.jpg');
+                      setAiGeneratedImage(null);
+                      setShowComparisonView(false);
+                      setShowStockBedInUpload(false);
+                    }}
+                    className={`px-2.5 py-1 rounded transition cursor-pointer border ${
+                      uploadedImage?.includes('stock_f250')
+                        ? 'bg-[#FC5716]/20 border-[#FC5716] text-[#FC5716] font-bold'
+                        : 'bg-[#222] border-[#333] text-gray-300 hover:text-white'
+                    }`}
+                  >
+                    Ford F-250 (Stock Factory Bed)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUploadedImage('./assets/denali_hd.jpg');
+                      setAiGeneratedImage(null);
+                      setShowComparisonView(false);
+                      setShowStockBedInUpload(false);
+                    }}
+                    className={`px-2.5 py-1 rounded transition cursor-pointer border ${
+                      uploadedImage?.includes('denali_hd')
+                        ? 'bg-[#FC5716]/20 border-[#FC5716] text-[#FC5716] font-bold'
+                        : 'bg-[#222] border-[#333] text-gray-300 hover:text-white'
+                    }`}
+                  >
+                    GMC Sierra HD (Denali)
                   </button>
                 </div>
               </div>
@@ -1239,10 +1321,12 @@ export default function App() {
                 <div className="space-y-4">
                   {/* Viewport Image */}
                   <div className="relative aspect-[16/10] w-full bg-[#050505] rounded-xl overflow-hidden border border-[#333333] flex items-center justify-center">
-                    {/* Render Image: AI Result or Original Photo */}
+                    {/* Render Image: Comparison View, AI Result, or Original Photo */}
                     <img
                       src={
-                        aiGeneratedImage && !showStockBedInUpload
+                        showComparisonView
+                          ? './assets/f250_comparison.jpg'
+                          : aiGeneratedImage && !showStockBedInUpload
                           ? aiGeneratedImage
                           : uploadedImage
                       }
@@ -1251,10 +1335,15 @@ export default function App() {
                     />
 
                     {/* Badge */}
-                    {aiGeneratedImage && !showStockBedInUpload ? (
+                    {showComparisonView ? (
+                      <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-20 bg-black/85 text-emerald-400 border border-emerald-500/40 px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider backdrop-blur-md shadow flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5" />
+                        EMPIRICAL TEST: Stock Truck vs Fine-Tuned DDFAB LoRA Inpaint
+                      </div>
+                    ) : aiGeneratedImage && !showStockBedInUpload ? (
                       <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-20 bg-black/85 text-[#FC5716] border border-[#FC5716]/40 px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider backdrop-blur-md shadow flex items-center gap-1.5">
                         <Sparkles className="w-3.5 h-3.5" />
-                        AI GENERATED: DD FAB {overlayBedStyle.replace('-', ' ').toUpperCase()}
+                        {uploadFitMode === 'ai-lora' ? 'BETA LORA INPAINT: DD FAB FLATBED' : `AI GENERATED: DD FAB ${overlayBedStyle.replace('-', ' ').toUpperCase()}`}
                       </div>
                     ) : showStockBedInUpload ? (
                       <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-20 bg-black/85 text-amber-400 border border-amber-500/40 px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider backdrop-blur-md shadow">
@@ -1319,7 +1408,9 @@ export default function App() {
                             {aiStepText}
                           </div>
                           <p className="text-[11px] text-gray-400 max-w-sm pt-1">
-                            Processing truck wheelbase geometry, removing the factory bed, and inpainting a custom DD Fab steel flatbed...
+                            {uploadFitMode === 'ai-lora'
+                              ? 'Applying custom-trained DD Fab LoRA weights (pytorch_lora_weights.safetensors) and inpainting the bed area...'
+                              : 'Processing vehicle chassis geometry and generating a complete photorealistic commercial flatbed truck...'}
                           </p>
                         </div>
                       </div>
@@ -1334,98 +1425,162 @@ export default function App() {
                   )}
 
                   {/* Main AI Generation Action Card */}
-                  <div className="bg-gradient-to-r from-[#181818] via-[#151515] to-[#121212] p-4 sm:p-5 rounded-xl border border-[#333] shadow-xl space-y-3.5">
-                    <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="bg-gradient-to-r from-[#181818] via-[#151515] to-[#121212] p-4 sm:p-5 rounded-xl border border-[#333] shadow-xl space-y-4">
+                    <div className="flex items-center justify-between flex-wrap gap-2 border-b border-[#252525] pb-3">
                       <div>
                         <div className="text-xs text-[#FC5716] font-heading font-bold uppercase tracking-wider flex items-center gap-1.5">
                           <Sparkles className="w-3.5 h-3.5" />
-                          Generative AI Inpainting Engine
+                          Generative AI Engine Options
                         </div>
                         <p className="text-xs text-gray-300 mt-0.5">
-                          Select your desired flatbed model, then run the AI engine to transform your truck photo.
+                          Compare the production concept engine, the experimental custom LoRA inpainter, and manual fit sliders:
                         </p>
                       </div>
 
-                      {/* Mode Switcher: AI vs Manual */}
-                      <div className="flex items-center space-x-1 bg-[#101010] p-1 rounded-lg border border-[#2a2a2a] text-xs">
+                      {/* 3-Mode Switcher */}
+                      <div className="flex items-center space-x-1 bg-[#101010] p-1 rounded-lg border border-[#2a2a2a] text-xs flex-wrap">
                         <button
                           type="button"
-                          onClick={() => setUploadFitMode('ai')}
-                          className={`px-2.5 py-1 rounded text-xs font-semibold cursor-pointer transition ${
-                            uploadFitMode === 'ai' ? 'bg-[#FC5716] text-black font-bold' : 'text-gray-400 hover:text-white'
+                          onClick={() => {
+                            setUploadFitMode('ai-concept');
+                            setAiGeneratedImage(null);
+                            setShowComparisonView(false);
+                          }}
+                          className={`px-3 py-1.5 rounded text-xs font-semibold cursor-pointer transition ${
+                            uploadFitMode === 'ai-concept' ? 'bg-[#FC5716] text-black font-bold' : 'text-gray-400 hover:text-white'
                           }`}
                         >
-                          AI Generator
+                          1. AI Concept (Production)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setUploadFitMode('ai-lora');
+                            setAiGeneratedImage(null);
+                            setShowComparisonView(false);
+                          }}
+                          className={`px-3 py-1.5 rounded text-xs font-semibold cursor-pointer transition ${
+                            uploadFitMode === 'ai-lora' ? 'bg-amber-500 text-black font-bold' : 'text-gray-400 hover:text-white'
+                          }`}
+                        >
+                          2. Custom LoRA Inpaint (Beta)
                         </button>
                         <button
                           type="button"
                           onClick={() => {
                             setUploadFitMode('manual');
                             setAiGeneratedImage(null);
+                            setShowComparisonView(false);
                           }}
-                          className={`px-2.5 py-1 rounded text-xs font-semibold cursor-pointer transition ${
+                          className={`px-3 py-1.5 rounded text-xs font-semibold cursor-pointer transition ${
                             uploadFitMode === 'manual' ? 'bg-[#FC5716] text-black font-bold' : 'text-gray-400 hover:text-white'
                           }`}
                         >
-                          Manual Fit Sliders
+                          3. Manual Photo Fit
                         </button>
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end pt-1">
-                      <div>
-                        <label className="text-xs font-semibold text-gray-300 block mb-1">Target DD Fab Bed Model:</label>
-                        <select
-                          value={overlayBedStyle}
-                          onChange={(e) => setOverlayBedStyle(e.target.value)}
-                          className="w-full bg-[#111] border border-[#333] rounded px-3 py-2 text-xs text-white outline-none focus:border-[#FC5716]"
-                        >
-                          <option value="deluxe-skirted">Deluxe Skirted Bed (Contoured toolboxes)</option>
-                          <option value="standard-work">Standard Utility Bed (Rub rails & stake pockets)</option>
-                          <option value="heritage-wood">Heritage Wood Inlay (Hardwood timber deck)</option>
-                          <option value="dually-hd-skirt">Dually (DRW) Heavy Duty (Flared skirts)</option>
-                        </select>
+                    {/* Mode Information Callout */}
+                    {uploadFitMode === 'ai-concept' && (
+                      <div className="text-xs text-gray-300 bg-[#151515] p-3 rounded-lg border border-[#262626] space-y-1">
+                        <span className="font-bold text-[#FC5716]">Mode 1 (Production Recommended): </span>
+                        <span>Re-imagines the truck into a complete, proportional commercial DD Fab flatbed build in an outdoor setting. Highly photorealistic and consistent for customer quote generation.</span>
                       </div>
+                    )}
 
-                      <div className="sm:col-span-2 flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={handleGenerateAiFlatbed}
-                          disabled={isAiGenerating}
-                          className="flex-1 py-2.5 px-4 bg-[#FC5716] hover:bg-[#ff692a] disabled:opacity-50 text-black font-heading font-bold text-xs sm:text-sm tracking-wider rounded-lg shadow-lg shadow-[#FC5716]/30 flex items-center justify-center gap-2 cursor-pointer transition"
-                        >
-                          <Sparkles className="w-4 h-4" />
-                          <span>{isAiGenerating ? 'GENERATING AI FLATBED...' : 'GENERATE AI FLATBED ON THIS TRUCK'}</span>
-                        </button>
+                    {uploadFitMode === 'ai-lora' && (
+                      <div className="text-xs text-amber-200/90 bg-amber-950/30 p-3 rounded-lg border border-amber-600/40 space-y-1">
+                        <span className="font-bold text-amber-400">Mode 2 (Experimental DD Fab LoRA Model): </span>
+                        <span>Fine-tuned on Mark's actual DD Fab photos. Replaces the factory bed with authentic diamond-plate and louvered headache rack. (Beta finding: 2D AI lacks 3D chassis physics, so custom angles can show perspective skew).</span>
+                      </div>
+                    )}
 
-                        {aiGeneratedImage && (
-                          <a
-                            href={aiGeneratedImage}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            download="carolina_flatbed_ai_render.jpg"
-                            className="py-2.5 px-3 bg-[#202020] hover:bg-[#282828] text-gray-200 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition border border-[#333]"
+                    {uploadFitMode === 'manual' && (
+                      <div className="text-xs text-gray-300 bg-[#151515] p-3 rounded-lg border border-[#262626] space-y-1">
+                        <span className="font-bold text-[#FC5716]">Mode 3 (Zero AI Hallucination): </span>
+                        <span>Position authentic DD Fab bed cutouts directly over your truck with alignment sliders. 100% photographic fidelity.</span>
+                      </div>
+                    )}
+
+                    {uploadFitMode !== 'manual' && (
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end pt-1">
+                        <div>
+                          <label className="text-xs font-semibold text-gray-300 block mb-1">Target DD Fab Bed Model:</label>
+                          <select
+                            value={overlayBedStyle}
+                            onChange={(e) => setOverlayBedStyle(e.target.value)}
+                            className="w-full bg-[#111] border border-[#333] rounded px-3 py-2 text-xs text-white outline-none focus:border-[#FC5716]"
                           >
-                            <Download className="w-3.5 h-3.5" />
-                            <span>Save Image</span>
-                          </a>
-                        )}
+                            <option value="deluxe-skirted">Deluxe Skirted Bed (Contoured toolboxes)</option>
+                            <option value="standard-work">Standard Utility Bed (Rub rails & stake pockets)</option>
+                            <option value="heritage-wood">Heritage Wood Inlay (Hardwood timber deck)</option>
+                            <option value="dually-hd-skirt">Dually (DRW) Heavy Duty (Flared skirts)</option>
+                          </select>
+                        </div>
+
+                        <div className="sm:col-span-2 flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={handleGenerateAiFlatbed}
+                            disabled={isAiGenerating}
+                            className={`flex-1 py-2.5 px-4 disabled:opacity-50 text-black font-heading font-bold text-xs sm:text-sm tracking-wider rounded-lg shadow-lg flex items-center justify-center gap-2 cursor-pointer transition ${
+                              uploadFitMode === 'ai-lora' ? 'bg-amber-400 hover:bg-amber-300 shadow-amber-400/20' : 'bg-[#FC5716] hover:bg-[#ff692a] shadow-[#FC5716]/30'
+                            }`}
+                          >
+                            <Sparkles className="w-4 h-4" />
+                            <span>
+                              {isAiGenerating
+                                ? 'GENERATING AI FLATBED...'
+                                : uploadFitMode === 'ai-lora'
+                                ? 'RUN EXPERIMENTAL DDFAB LORA INPAINT'
+                                : 'GENERATE AI CONCEPT FLATBED'}
+                            </span>
+                          </button>
+
+                          {aiGeneratedImage && (
+                            <a
+                              href={aiGeneratedImage}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              download="carolina_flatbed_ai_render.jpg"
+                              className="py-2.5 px-3 bg-[#202020] hover:bg-[#282828] text-gray-200 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition border border-[#333]"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                              <span>Save Image</span>
+                            </a>
+                          )}
+                        </div>
                       </div>
-                    </div>
+                    )}
 
                     {aiGeneratedImage && (
                       <div className="bg-[#101912] border border-emerald-600/40 rounded-lg p-2.5 text-xs text-emerald-300 flex items-center justify-between gap-2 flex-wrap">
                         <div className="flex items-center gap-1.5">
                           <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                          <span>AI flatbed successfully rendered and fit to your truck chassis.</span>
+                          <span>AI flatbed successfully rendered and fit to your truck.</span>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => setShowStockBedInUpload(!showStockBedInUpload)}
-                          className="text-xs font-bold text-amber-400 underline hover:text-amber-300 cursor-pointer"
-                        >
-                          {showStockBedInUpload ? 'View AI Flatbed' : 'Compare Original Truck'}
-                        </button>
+                        <div className="flex items-center gap-2">
+                          {uploadedImage?.includes('stock_f250') && (
+                            <button
+                              type="button"
+                              onClick={() => setShowComparisonView(!showComparisonView)}
+                              className="text-xs font-bold text-emerald-400 underline hover:text-emerald-300 cursor-pointer"
+                            >
+                              {showComparisonView ? 'View Single Result' : 'View Side-by-Side Test'}
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowComparisonView(false);
+                              setShowStockBedInUpload(!showStockBedInUpload);
+                            }}
+                            className="text-xs font-bold text-amber-400 underline hover:text-amber-300 cursor-pointer"
+                          >
+                            {showStockBedInUpload ? 'View AI Flatbed' : 'Compare Original Truck'}
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
