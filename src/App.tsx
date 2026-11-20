@@ -103,6 +103,8 @@ const TRUCK_MAKE_MODELS = [
 
 const TRUCK_YEARS = Array.from({ length: 32 }, (_, i) => (2026 - i).toString());
 
+const FENDER_VARIATION_IDS = ['step-fender', 'octagon-fenders', 'shortbed-toolbox-fender'];
+
 interface AddOnOption {
   id: string;
   name: string;
@@ -236,6 +238,47 @@ const EXTRA_INSTALL_OPTIONS: ExtraInstallOption[] = [
   }
 ];
 
+interface DeductionOption {
+  id: string;
+  name: string;
+  note: string;
+  woodTrexOnly?: boolean;
+  getAmount: (deckType: DeckType) => number;
+  getPriceLabel: (deckType: DeckType) => string;
+}
+
+const TABLE2_DEDUCTION_OPTIONS: DeductionOption[] = [
+  {
+    id: 'remove-stock-bed',
+    name: 'Remove stock bed prior to install',
+    note: 'You remove factory bed before arrival',
+    getAmount: () => 250,
+    getPriceLabel: () => '-$250'
+  },
+  {
+    id: 'no-decking',
+    name: 'No decking (wood/trex beds only)',
+    note: 'Frame only without wood or Trex planks',
+    woodTrexOnly: true,
+    getAmount: () => 250,
+    getPriceLabel: () => '-$250'
+  },
+  {
+    id: 'no-powdercoat',
+    name: 'No powdercoat (raw steel)',
+    note: 'Unfinished bare steel fabrication',
+    getAmount: () => 925,
+    getPriceLabel: () => '-$925'
+  },
+  {
+    id: 'no-install',
+    name: 'No Install (You install)',
+    note: 'Carry-out bed only (-$625 Steel / -$775 Wood or Trex)',
+    getAmount: (deckType) => (deckType === 'steel' ? 625 : 775),
+    getPriceLabel: (deckType) => (deckType === 'steel' ? '-$625' : '-$775')
+  }
+];
+
 // Exact base model + install pricing table from Mark's Standard & Full Skirted PDFs
 const BASE_PRICE_TABLE: Record<
   BedStyle,
@@ -261,7 +304,7 @@ export default function App() {
   const [wheelConfig, setWheelConfig] = useState<WheelConfig>('srw');
   const [bedLength, setBedLength] = useState<BedLength>('short');
 
-  // Photo state (default to null so user clearly sees how to upload or click a sample truck, or pre-load sample if desired)
+  // Photo state
   const [uploadedImage, setUploadedImage] = useState<string | null>('./assets/stock_f250.jpg');
   const [activeSampleId, setActiveSampleId] = useState<string | null>('f250');
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -273,6 +316,7 @@ export default function App() {
   const [selectedAddOns, setSelectedAddOns] = useState<string[]>([]);
   const [dRingCount, setDRingCount] = useState<number>(4);
   const [selectedExtraInstalls, setSelectedExtraInstalls] = useState<string[]>([]);
+  const [selectedDeductions, setSelectedDeductions] = useState<string[]>([]);
   const [showExtraAccordion, setShowExtraAccordion] = useState<boolean>(false);
 
   // Optional price sheet estimate visibility (default false so the UI stays simple & quote-focused)
@@ -310,8 +354,29 @@ export default function App() {
   const previewCardRef = useRef<HTMLDivElement>(null);
   const quoteSectionRef = useRef<HTMLDivElement>(null);
 
-  const currentConfigKey = `${uploadedImage || ''}|${bedStyle}|${deckType}|${wheelConfig}|${selectedAddOns.slice().sort().join(',')}`;
-  const isRenderOutdated = Boolean(aiGeneratedImage && renderedConfigKey && renderedConfigKey !== currentConfigKey);
+  // Computed labels
+  const resolvedTruckName =
+    truckMakeModel === 'Other / Custom Model'
+      ? customMakeModel.trim() || 'Custom Pickup Truck'
+      : truckMakeModel;
+
+  const wheelConfigLabel =
+    wheelConfig === 'srw'
+      ? 'Single Rear Wheel (SRW)'
+      : wheelConfig === 'dually'
+      ? 'Dually (DRW)'
+      : 'Cab / Chassis';
+
+  const bedLengthLabel = bedLength === 'short' ? 'Short Bed' : 'Long Bed';
+  const bedStyleLabel =
+    bedStyle === 'standard' ? 'Standard Model (Non-Skirted)' : 'Full Skirted Model';
+  const deckTypeLabel =
+    deckType === 'wood' ? 'Wood Deck' : deckType === 'trex' ? 'Trex Deck' : 'Steel Deck';
+
+  const currentConfigKey = `${uploadedImage || ''}|${truckYear}|${resolvedTruckName}|${wheelConfig}|${bedLength}|${bedStyle}|${deckType}|${dRingCount}|${selectedAddOns.slice().sort().join(',')}`;
+  const isRenderOutdated = Boolean(
+    aiGeneratedImage && renderedConfigKey && renderedConfigKey !== currentConfigKey
+  );
 
   // Clean up bed-length-restricted add-ons when switching between Short Bed and Long Bed
   useEffect(() => {
@@ -343,24 +408,12 @@ export default function App() {
     }
   }, [wheelConfig]);
 
-  // Computed labels
-  const resolvedTruckName =
-    truckMakeModel === 'Other / Custom Model'
-      ? customMakeModel.trim() || 'Custom Pickup Truck'
-      : truckMakeModel;
-
-  const wheelConfigLabel =
-    wheelConfig === 'srw'
-      ? 'Single Rear Wheel (SRW)'
-      : wheelConfig === 'dually'
-      ? 'Dually (DRW)'
-      : 'Cab / Chassis';
-
-  const bedLengthLabel = bedLength === 'short' ? 'Short Bed' : 'Long Bed';
-  const bedStyleLabel =
-    bedStyle === 'standard' ? 'Standard Model (Non-Skirted)' : 'Full Skirted Model';
-  const deckTypeLabel =
-    deckType === 'wood' ? 'Wood Deck' : deckType === 'trex' ? 'Trex Deck' : 'Steel Deck';
+  // Clean up wood/trex-only no-decking deduction when steel deck is chosen
+  useEffect(() => {
+    if (deckType === 'steel') {
+      setSelectedDeductions((prev) => prev.filter((id) => id !== 'no-decking'));
+    }
+  }, [deckType]);
 
   // Filter add-ons visible for current flatbed style
   const visibleVisualAddOns = VISUAL_ADDONS.filter((addon) => {
@@ -368,7 +421,7 @@ export default function App() {
     return true;
   });
 
-  // Calculate exact price sheet math from Mark's 2 PDFs
+  // Calculate exact price sheet math from Mark's 2 PDFs (Table 1 + Table 2 Deductions)
   const calculatePriceBreakdown = () => {
     const baseSpec = BASE_PRICE_TABLE[bedStyle][deckType];
     const isCabChassis = wheelConfig === 'cab-chassis';
@@ -405,8 +458,29 @@ export default function App() {
       }
     }
 
+    const itemizedDeductions: { label: string; amount: number }[] = [];
+    let totalDeductions = 0;
+
+    if (tacomaDeduction > 0) {
+      totalDeductions += tacomaDeduction;
+      itemizedDeductions.push({
+        label: 'Tacoma deduction off base price (Tacoma only)',
+        amount: tacomaDeduction
+      });
+    }
+
+    for (const id of selectedDeductions) {
+      const ded = TABLE2_DEDUCTION_OPTIONS.find((d) => d.id === id);
+      if (ded) {
+        if (ded.woodTrexOnly && deckType === 'steel') continue;
+        const amt = ded.getAmount(deckType);
+        totalDeductions += amt;
+        itemizedDeductions.push({ label: ded.name, amount: amt });
+      }
+    }
+
     const totalInstalled =
-      basePrice !== null ? basePrice + installPrice + addOnsTotal - tacomaDeduction : null;
+      basePrice !== null ? basePrice + installPrice + addOnsTotal - totalDeductions : null;
 
     return {
       isCabChassis,
@@ -415,20 +489,28 @@ export default function App() {
       tacomaDeduction,
       addOnsTotal,
       itemizedAddOns,
+      itemizedDeductions,
+      totalDeductions,
       totalInstalled
     };
   };
 
   const priceBreakdown = calculatePriceBreakdown();
 
-  // Toggle visual add-on selection
+  // Toggle visual add-on selection (enforcing mutually exclusive rear fender variations per Table 1)
   const toggleAddOn = (addon: AddOnOption) => {
     if (addon.bedRestriction === 'long-only' && bedLength !== 'long') return;
     if (addon.bedRestriction === 'short-only' && bedLength !== 'short') return;
 
-    setSelectedAddOns((prev) =>
-      prev.includes(addon.id) ? prev.filter((id) => id !== addon.id) : [...prev, addon.id]
-    );
+    setSelectedAddOns((prev) => {
+      if (prev.includes(addon.id)) {
+        return prev.filter((id) => id !== addon.id);
+      }
+      if (FENDER_VARIATION_IDS.includes(addon.id)) {
+        return [...prev.filter((id) => !FENDER_VARIATION_IDS.includes(id)), addon.id];
+      }
+      return [...prev, addon.id];
+    });
   };
 
   const toggleExtraInstall = (extra: ExtraInstallOption) => {
@@ -438,7 +520,14 @@ export default function App() {
     );
   };
 
-  // Process uploaded image file (EXIF-stripping canvas re-encode)
+  const toggleDeduction = (ded: DeductionOption) => {
+    if (ded.woodTrexOnly && deckType === 'steel') return;
+    setSelectedDeductions((prev) =>
+      prev.includes(ded.id) ? prev.filter((id) => id !== ded.id) : [...prev, ded.id]
+    );
+  };
+
+  // Process uploaded image file (Fail-closed EXIF-stripping canvas re-encode)
   const processImageFile = (file: File) => {
     setUploadError(null);
     setAiError(null);
@@ -456,11 +545,6 @@ export default function App() {
       return;
     }
 
-    setAiGeneratedImage(null);
-    setRenderedConfigKey(null);
-    setIsQuoteFormOpen(false);
-    setQuoteSubmitted(false);
-
     const reader = new FileReader();
     reader.onerror = () => {
       setUploadError('Failed to read image file. Please try another photo.');
@@ -474,6 +558,10 @@ export default function App() {
           const maxDim = 1600;
           let targetW = img.naturalWidth;
           let targetH = img.naturalHeight;
+          if (targetW <= 0 || targetH <= 0) {
+            setUploadError('Unable to process image file. Please try another JPG, PNG, or WebP photo.');
+            return;
+          }
           if (targetW > maxDim || targetH > maxDim) {
             if (targetW > targetH) {
               targetH = Math.round((targetH * maxDim) / targetW);
@@ -486,20 +574,23 @@ export default function App() {
           canvas.width = targetW;
           canvas.height = targetH;
           const ctx = canvas.getContext('2d');
-          if (ctx) {
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, targetW, targetH);
-            ctx.drawImage(img, 0, 0, targetW, targetH);
-            const sanitizedDataUrl = canvas.toDataURL('image/jpeg', 0.92);
-            setUploadedImage(sanitizedDataUrl);
-            setActiveSampleId(null);
-          } else {
-            setUploadedImage(rawDataUrl);
-            setActiveSampleId(null);
+          if (!ctx) {
+            setUploadError('Unable to process image file. Please try another JPG, PNG, or WebP photo.');
+            return;
           }
-        } catch {
-          setUploadedImage(rawDataUrl);
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, targetW, targetH);
+          ctx.drawImage(img, 0, 0, targetW, targetH);
+          const sanitizedDataUrl = canvas.toDataURL('image/jpeg', 0.92);
+          setUploadedImage(sanitizedDataUrl);
           setActiveSampleId(null);
+          setAiGeneratedImage(null);
+          setRenderedConfigKey(null);
+          setIsQuoteFormOpen(false);
+          setQuoteSubmitted(false);
+        } catch {
+          setUploadError('Unable to process image file. Please try another JPG, PNG, or WebP photo.');
+          return;
         }
       };
       img.onerror = () => {
@@ -531,52 +622,83 @@ export default function App() {
     setUploadedImage(sample.beforeImage);
     setTruckYear(sample.year);
     setTruckMakeModel(sample.makeModel);
+    setCustomMakeModel('');
     setWheelConfig(sample.wheelConfig);
     setBedLength(sample.bedLength);
     setBedStyle(sample.defaultStyle);
     setDeckType(sample.defaultDeck);
     setSelectedAddOns([]);
+    setSelectedExtraInstalls([]);
+    setSelectedDeductions([]);
+    setDRingCount(4);
     setAiGeneratedImage(null);
     setRenderedConfigKey(null);
     setIsQuoteFormOpen(false);
     setQuoteSubmitted(false);
   };
 
-  // Fallback pre-rendered image lookup if offline or worker error on sample trucks
-  const getSampleFallbackImage = (): string | null => {
-    if (!uploadedImage) return null;
-    if (uploadedImage.includes('stock_f250')) {
-      if (bedStyle === 'full-skirted') return './assets/f250_lora_inpaint.jpg';
-      if (deckType === 'wood') return './assets/f250_heritage_wood.jpg';
-      return './assets/f250_standard_work.jpg';
-    }
-    if (uploadedImage.includes('stock_silverado_2500hd')) {
-      return './assets/after_silverado_heritage_wood.jpg';
-    }
-    if (uploadedImage.includes('stock_sierra_2500hd')) {
-      return './assets/after_sierra_standard_utility.jpg';
-    }
-    if (uploadedImage.includes('stock_ram_2500')) {
-      return './assets/after_ram_deluxe_skirted.jpg';
-    }
-    return null;
-  };
-
-  // Check if current sample selection matches an exact pre-verified instant studio render (zero add-ons & exact deck match)
+  // Check if current sample selection matches an exact pre-verified instant studio render
   const getExactPreRenderedSampleMatch = (): string | null => {
-    if (!uploadedImage || selectedAddOns.length > 0 || wheelConfig === 'dually') return null;
+    if (!uploadedImage || selectedAddOns.length > 0 || wheelConfig !== 'srw') return null;
+    const activeSample = SAMPLE_TRUCKS.find((s) => s.id === activeSampleId);
+    if (!activeSample || bedLength !== activeSample.bedLength) return null;
+
     if (uploadedImage.includes('stock_f250')) {
       if (bedStyle === 'standard' && deckType === 'wood') return './assets/f250_heritage_wood.jpg';
       if (bedStyle === 'standard' && deckType === 'steel') return './assets/f250_standard_work.jpg';
       if (bedStyle === 'full-skirted' && deckType === 'steel') return './assets/f250_lora_inpaint.jpg';
     }
-    if (uploadedImage.includes('stock_silverado_2500hd') && bedStyle === 'standard' && deckType === 'wood') {
+    if (
+      uploadedImage.includes('stock_silverado_2500hd') &&
+      bedStyle === 'standard' &&
+      deckType === 'wood'
+    ) {
       return './assets/after_silverado_heritage_wood.jpg';
     }
-    if (uploadedImage.includes('stock_sierra_2500hd') && bedStyle === 'standard' && deckType === 'steel') {
+    if (
+      uploadedImage.includes('stock_sierra_2500hd') &&
+      bedStyle === 'standard' &&
+      deckType === 'steel'
+    ) {
       return './assets/after_sierra_standard_utility.jpg';
     }
-    if (uploadedImage.includes('stock_ram_2500') && bedStyle === 'full-skirted' && deckType === 'steel') {
+    if (
+      uploadedImage.includes('stock_ram_2500') &&
+      bedStyle === 'full-skirted' &&
+      deckType === 'steel'
+    ) {
+      return './assets/after_ram_deluxe_skirted.jpg';
+    }
+    return null;
+  };
+
+  // Fallback pre-rendered image lookup ONLY when bedStyle and deckType match the pre-rendered asset
+  const getSampleFallbackImage = (): string | null => {
+    if (!uploadedImage) return null;
+    if (uploadedImage.includes('stock_f250')) {
+      if (bedStyle === 'standard' && deckType === 'wood') return './assets/f250_heritage_wood.jpg';
+      if (bedStyle === 'standard' && deckType === 'steel') return './assets/f250_standard_work.jpg';
+      if (bedStyle === 'full-skirted' && deckType === 'steel') return './assets/f250_lora_inpaint.jpg';
+    }
+    if (
+      uploadedImage.includes('stock_silverado_2500hd') &&
+      bedStyle === 'standard' &&
+      deckType === 'wood'
+    ) {
+      return './assets/after_silverado_heritage_wood.jpg';
+    }
+    if (
+      uploadedImage.includes('stock_sierra_2500hd') &&
+      bedStyle === 'standard' &&
+      deckType === 'steel'
+    ) {
+      return './assets/after_sierra_standard_utility.jpg';
+    }
+    if (
+      uploadedImage.includes('stock_ram_2500') &&
+      bedStyle === 'full-skirted' &&
+      deckType === 'steel'
+    ) {
       return './assets/after_ram_deluxe_skirted.jpg';
     }
     return null;
@@ -632,7 +754,7 @@ export default function App() {
         return;
       }
 
-      // Convert relative sample truck URL to base64 data URL so the Cloudflare Worker can always read it reliably (even on localhost)
+      // Convert relative sample truck URL to base64 data URL so the Cloudflare Worker can always read it reliably
       let imagePayload = uploadedImage;
       if (uploadedImage.startsWith('./') || uploadedImage.startsWith('/')) {
         try {
@@ -674,7 +796,9 @@ export default function App() {
           bedLength,
           bedStyle,
           deckType,
-          addOns: selectedAddOns
+          addOns: selectedAddOns,
+          dRingCount,
+          extraInstalls: selectedExtraInstalls
         })
       });
 
@@ -717,7 +841,7 @@ export default function App() {
         setRenderedSummaryLabel(`${bedStyleLabel} (${deckTypeLabel})`);
       } else {
         setAiError(
-          err.message || 'Could not complete AI preview. Please try one of the sample trucks or retry.'
+          err.message || 'Could not complete AI preview. Please click Generate AI Flatbed Preview to retry.'
         );
       }
     } finally {
@@ -739,7 +863,7 @@ export default function App() {
   };
 
   // Submit Quote Request
-  const handleQuoteSubmit = (e: React.FormEvent) => {
+  const handleQuoteSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setValidationError(null);
 
@@ -748,7 +872,7 @@ export default function App() {
       return;
     }
     const phoneDigits = formData.phone.replace(/\D/g, '');
-    if (phoneDigits.length < 7) {
+    if (phoneDigits.length < 10) {
       setValidationError('Please enter a valid 10-digit phone number.');
       return;
     }
@@ -769,45 +893,79 @@ export default function App() {
       ...selectedExtraInstalls.map((id) => EXTRA_INSTALL_OPTIONS.find((e) => e.id === id)?.name)
     ].filter(Boolean) as string[];
 
+    const selectedDeductionNames = priceBreakdown.itemizedDeductions.map(
+      (d) => `${d.label} (-$${d.amount})`
+    );
+
     const summarySnapshot = `${truckYear} ${resolvedTruckName} (${bedStyleLabel}, ${deckTypeLabel}${
       selectedAddOnNames.length > 0 ? ' + ' + selectedAddOnNames.join(', ') : ''
     })`;
     setSubmittedSummaryText(summarySnapshot);
 
-    try {
-      const inquiryPayload = {
-        refId,
-        submittedAt: new Date().toISOString(),
-        customer: {
-          name: formData.name.trim(),
-          phone: formData.phone.trim(),
-          email: formData.email.trim(),
-          cityZip: formData.cityZip.trim(),
-          notes: formData.notes.trim()
-        },
-        truck: {
-          year: truckYear,
-          makeModel: resolvedTruckName,
-          wheelConfig: wheelConfigLabel,
-          bedLength: bedLengthLabel
-        },
-        flatbedOptions: {
-          bedStyle: bedStyleLabel,
-          deckType: deckTypeLabel,
-          addOns: selectedAddOnNames,
-          priceSheetBreakdown: {
-            basePrice: priceBreakdown.basePrice,
-            installPrice: priceBreakdown.installPrice,
-            addOnsTotal: priceBreakdown.addOnsTotal,
-            tacomaDeduction: priceBreakdown.tacomaDeduction,
-            totalInstalled: priceBreakdown.totalInstalled
-          }
+    const inquiryPayload = {
+      refId,
+      submittedAt: new Date().toISOString(),
+      customer: {
+        name: formData.name.trim(),
+        phone: formData.phone.trim(),
+        email: formData.email.trim(),
+        cityZip: formData.cityZip.trim(),
+        notes: formData.notes.trim()
+      },
+      truck: {
+        year: truckYear,
+        makeModel: resolvedTruckName,
+        wheelConfig,
+        wheelConfigLabel,
+        bedLength,
+        bedLengthLabel,
+        activeSampleId
+      },
+      flatbedOptions: {
+        bedStyle,
+        bedStyleLabel,
+        deckType,
+        deckTypeLabel,
+        addOns: selectedAddOns,
+        addOnLabels: selectedAddOnNames,
+        dRingCount,
+        extraInstalls: selectedExtraInstalls,
+        deductions: selectedDeductions,
+        deductionLabels: selectedDeductionNames,
+        priceBreakdown: {
+          basePrice: priceBreakdown.basePrice,
+          installPrice: priceBreakdown.installPrice,
+          addOnsTotal: priceBreakdown.addOnsTotal,
+          tacomaDeduction: priceBreakdown.tacomaDeduction,
+          totalDeductions: priceBreakdown.totalDeductions,
+          totalInstalled: priceBreakdown.totalInstalled
         }
-      };
+      },
+      aiPreviewImage: aiGeneratedImage,
+      uploadedTruckImage: uploadedImage
+    };
+
+    try {
       const existing = JSON.parse(localStorage.getItem('cfb_quote_inquiries') || '[]');
-      localStorage.setItem('cfb_quote_inquiries', JSON.stringify([inquiryPayload, ...existing]));
+      localStorage.setItem(
+        'cfb_quote_inquiries',
+        JSON.stringify([inquiryPayload, ...existing.slice(0, 29)])
+      );
     } catch {
       // Ignore storage quota errors
+    }
+
+    try {
+      await fetch('https://cfb-ai-generator.tek123168.workers.dev', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'submit-quote',
+          ...inquiryPayload
+        })
+      });
+    } catch {
+      // Offline / local fallback already saved
     }
 
     setQuoteSubmitted(true);
@@ -825,21 +983,21 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#090909] text-gray-100 flex flex-col overflow-x-hidden w-full selection:bg-[#FC5716] selection:text-white">
-      {/* Clean Brand Header */}
+      {/* Clean Brand Header (zero truncation across 320px - 1920px) */}
       <header className="border-b border-[#222222] bg-[#0d0d0d]/95 backdrop-blur sticky top-0 z-40 w-full">
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-            <div className="w-9 h-9 sm:w-10 sm:h-10 shrink-0 rounded-lg bg-[#FC5716] flex items-center justify-center font-heading font-bold text-black text-base sm:text-xl tracking-wider shadow-md shadow-[#FC5716]/20">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2 sm:gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 shrink-0 rounded-lg bg-[#FC5716] flex items-center justify-center font-heading font-bold text-black text-sm sm:text-xl tracking-wider shadow-md shadow-[#FC5716]/20">
               CF
             </div>
-            <div className="min-w-0">
-              <div className="font-heading font-bold text-sm sm:text-lg text-white tracking-wide flex items-center gap-2 truncate">
+            <div>
+              <div className="font-heading font-bold text-sm sm:text-lg text-white tracking-wide flex items-center gap-2 whitespace-nowrap">
                 <span>CAROLINA FLATBEDS</span>
-                <span className="text-[10px] font-sans font-semibold px-2 py-0.5 rounded bg-[#FC5716]/15 text-[#FC5716] border border-[#FC5716]/30 uppercase tracking-wider hidden sm:inline-block">
+                <span className="text-[10px] font-sans font-semibold px-2 py-0.5 rounded bg-[#FC5716]/15 text-[#FC5716] border border-[#FC5716]/30 uppercase tracking-wider hidden lg:inline-block">
                   AI Flatbed Visualizer
                 </span>
               </div>
-              <p className="text-[11px] sm:text-xs text-gray-400 truncate">
+              <p className="hidden sm:block text-xs text-gray-400 font-medium">
                 Authorized DD Fab Upfitter | Charleston, SC
               </p>
             </div>
@@ -849,19 +1007,22 @@ export default function App() {
             <button
               type="button"
               onClick={() => setShowPrices((p) => !p)}
-              className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold border transition cursor-pointer flex items-center gap-1.5 ${
+              className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold border transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
                 showPrices
                   ? 'bg-[#FC5716]/15 border-[#FC5716] text-[#FC5716]'
                   : 'bg-[#161616] border-[#2c2c2c] text-gray-300 hover:border-gray-500'
               }`}
             >
-              <SlidersHorizontal className="w-3.5 h-3.5" />
-              <span>{showPrices ? 'Hide Price Sheet' : 'View Price Sheet Estimate'}</span>
+              <SlidersHorizontal className="w-3.5 h-3.5 shrink-0" />
+              <span className="sm:hidden">{showPrices ? 'Hide Prices' : 'Price Sheet'}</span>
+              <span className="hidden sm:inline">
+                {showPrices ? 'Hide Price Sheet' : 'View Price Sheet Estimate'}
+              </span>
             </button>
 
             <a
               href="tel:8436476437"
-              className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#161616] border border-[#2c2c2c] hover:border-[#FC5716]/50 text-xs font-semibold text-gray-200 transition"
+              className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#161616] border border-[#2c2c2c] hover:border-[#FC5716]/50 text-xs font-semibold text-gray-200 transition whitespace-nowrap"
             >
               <Phone className="w-3.5 h-3.5 text-[#FC5716]" />
               <span>843-647-6437</span>
@@ -978,6 +1139,7 @@ export default function App() {
                   <input
                     id="custom-truck-input"
                     type="text"
+                    maxLength={80}
                     placeholder="e.g. 2018 Nissan Titan XD or Ford F-450"
                     value={customMakeModel}
                     onChange={(e) => setCustomMakeModel(e.target.value)}
@@ -992,7 +1154,7 @@ export default function App() {
                   <span className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">
                     Rear Wheel Configuration
                   </span>
-                  <div className="grid grid-cols-3 gap-1.5 bg-[#181818] p-1 rounded-lg border border-[#2c2c2c]">
+                  <div className="grid grid-cols-3 gap-1 bg-[#181818] p-1 rounded-lg border border-[#2c2c2c]">
                     {(
                       [
                         { id: 'srw', label: 'SRW (Single)' },
@@ -1003,8 +1165,9 @@ export default function App() {
                       <button
                         key={item.id}
                         type="button"
+                        aria-pressed={wheelConfig === item.id}
                         onClick={() => setWheelConfig(item.id)}
-                        className={`py-2 px-2 rounded-md text-xs font-semibold transition cursor-pointer text-center ${
+                        className={`py-2 px-1 sm:px-2 rounded-md text-[11px] sm:text-xs font-semibold transition cursor-pointer text-center ${
                           wheelConfig === item.id
                             ? 'bg-[#FC5716] text-black font-bold shadow'
                             : 'text-gray-300 hover:text-white hover:bg-[#222222]'
@@ -1030,8 +1193,9 @@ export default function App() {
                       <button
                         key={item.id}
                         type="button"
+                        aria-pressed={bedLength === item.id}
                         onClick={() => setBedLength(item.id)}
-                        className={`py-2 px-2.5 rounded-md text-xs font-semibold transition cursor-pointer text-center ${
+                        className={`py-2 px-2 rounded-md text-[11px] sm:text-xs font-semibold transition cursor-pointer text-center ${
                           bedLength === item.id
                             ? 'bg-[#FC5716] text-black font-bold shadow'
                             : 'text-gray-300 hover:text-white hover:bg-[#222222]'
@@ -1059,6 +1223,14 @@ export default function App() {
                 </div>
 
                 <div
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      fileInputRef.current?.click();
+                    }
+                  }}
                   onDragOver={(e) => {
                     e.preventDefault();
                     setIsDraggingOver(true);
@@ -1104,7 +1276,9 @@ export default function App() {
                 </div>
 
                 {uploadError && (
-                  <p className="mt-2 text-xs text-red-400 font-medium">{uploadError}</p>
+                  <p role="alert" className="mt-2 text-xs text-red-400 font-medium">
+                    {uploadError}
+                  </p>
                 )}
 
                 {/* 4 One-Click Sample Trucks */}
@@ -1119,6 +1293,7 @@ export default function App() {
                         <button
                           key={sample.id}
                           type="button"
+                          aria-pressed={isSelected}
                           onClick={() => handleSelectSampleTruck(sample)}
                           className={`group flex items-center gap-2 p-1.5 rounded-lg border text-left transition cursor-pointer ${
                             isSelected
@@ -1174,6 +1349,7 @@ export default function App() {
                   {/* Standard Model (Non-Skirted) */}
                   <button
                     type="button"
+                    aria-pressed={bedStyle === 'standard'}
                     onClick={() => setBedStyle('standard')}
                     className={`group rounded-xl overflow-hidden border-2 text-left transition flex flex-col cursor-pointer ${
                       bedStyle === 'standard'
@@ -1212,7 +1388,8 @@ export default function App() {
                       </div>
                       {showPrices && (
                         <div className="mt-2.5 pt-2 border-t border-[#2c2c2c] text-xs font-semibold text-[#FC5716]">
-                          Starting at $5,495 + $775 install
+                          Starting at ${BASE_PRICE_TABLE.standard.wood.srw.toLocaleString()} + $
+                          {BASE_PRICE_TABLE.standard.wood.install} install
                         </div>
                       )}
                     </div>
@@ -1221,6 +1398,7 @@ export default function App() {
                   {/* Full Skirted Model */}
                   <button
                     type="button"
+                    aria-pressed={bedStyle === 'full-skirted'}
                     onClick={() => setBedStyle('full-skirted')}
                     className={`group rounded-xl overflow-hidden border-2 text-left transition flex flex-col cursor-pointer ${
                       bedStyle === 'full-skirted'
@@ -1259,7 +1437,8 @@ export default function App() {
                       </div>
                       {showPrices && (
                         <div className="mt-2.5 pt-2 border-t border-[#2c2c2c] text-xs font-semibold text-[#FC5716]">
-                          Starting at $7,925 + $775 install
+                          Starting at ${BASE_PRICE_TABLE['full-skirted'].wood.srw.toLocaleString()} + $
+                          {BASE_PRICE_TABLE['full-skirted'].wood.install} install
                         </div>
                       )}
                     </div>
@@ -1312,6 +1491,7 @@ export default function App() {
                       <button
                         key={deck.id}
                         type="button"
+                        aria-pressed={isSelected}
                         onClick={() => setDeckType(deck.id)}
                         className={`group rounded-xl overflow-hidden border-2 text-left transition flex flex-col cursor-pointer ${
                           isSelected
@@ -1385,6 +1565,16 @@ export default function App() {
                     return (
                       <div
                         key={addon.id}
+                        role="button"
+                        tabIndex={isDisabledByBed ? -1 : 0}
+                        aria-pressed={isSelected}
+                        aria-disabled={isDisabledByBed}
+                        onKeyDown={(e) => {
+                          if (!isDisabledByBed && (e.key === 'Enter' || e.key === ' ')) {
+                            e.preventDefault();
+                            toggleAddOn(addon);
+                          }
+                        }}
                         onClick={() => {
                           if (!isDisabledByBed) toggleAddOn(addon);
                         }}
@@ -1447,6 +1637,8 @@ export default function App() {
                                   <button
                                     key={qty}
                                     type="button"
+                                    aria-pressed={dRingCount === qty}
+                                    aria-label={`${qty} D-Rings`}
                                     onClick={() => setDRingCount(qty)}
                                     className={`px-1.5 py-0.5 rounded text-[10px] font-bold cursor-pointer ${
                                       dRingCount === qty
@@ -1466,18 +1658,19 @@ export default function App() {
                   })}
                 </div>
 
-                {/* Collapsible Accordion for Additional Factory Install Options (Camera, Sensors, Class V Receiver) */}
+                {/* Collapsible Accordion for Additional Factory Install & Table 2 Deduction Options */}
                 <div className="mt-4 border border-[#282828] rounded-xl bg-[#161616] overflow-hidden">
                   <button
                     type="button"
+                    aria-expanded={showExtraAccordion}
                     onClick={() => setShowExtraAccordion((p) => !p)}
                     className="w-full px-4 py-3 flex items-center justify-between text-left text-xs font-semibold text-gray-300 hover:text-white transition cursor-pointer"
                   >
                     <span>
-                      Additional Factory Install Options (Backup Camera, Parking Sensors, Class V Receiver)
-                      {selectedExtraInstalls.length > 0 && (
+                      Additional Factory Install & Deduction Options (Camera, Sensors, Receiver, DIY Deductions)
+                      {selectedExtraInstalls.length + selectedDeductions.length > 0 && (
                         <span className="ml-2 px-2 py-0.5 rounded-full bg-[#FC5716]/20 text-[#FC5716] text-[11px]">
-                          {selectedExtraInstalls.length} selected
+                          {selectedExtraInstalls.length + selectedDeductions.length} selected
                         </span>
                       )}
                     </span>
@@ -1489,45 +1682,100 @@ export default function App() {
                   </button>
 
                   {showExtraAccordion && (
-                    <div className="px-4 pb-3.5 pt-1 border-t border-[#222222] grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                      {EXTRA_INSTALL_OPTIONS.map((extra) => {
-                        const isSelected = selectedExtraInstalls.includes(extra.id);
-                        const disabled = extra.cabChassisOnly && wheelConfig !== 'cab-chassis';
-                        return (
-                          <button
-                            key={extra.id}
-                            type="button"
-                            disabled={disabled}
-                            onClick={() => toggleExtraInstall(extra)}
-                            className={`p-2.5 rounded-lg border text-left transition flex items-start justify-between gap-2 ${
-                              disabled
-                                ? 'border-[#222222] bg-[#121212] opacity-50 cursor-not-allowed'
-                                : isSelected
-                                ? 'border-[#FC5716] bg-[#1b1613] cursor-pointer'
-                                : 'border-[#2c2c2c] bg-[#1a1a1a] hover:border-gray-500 cursor-pointer'
-                            }`}
-                          >
-                            <div>
-                              <div className="text-xs font-bold text-white">{extra.name}</div>
-                              <div className="text-[10px] text-gray-400 mt-0.5">{extra.note}</div>
-                              {showPrices && (
-                                <div className="text-[11px] font-semibold text-[#FC5716] mt-1">
-                                  +${extra.price}
+                    <div className="px-4 pb-4 pt-2 border-t border-[#222222] space-y-4">
+                      <div>
+                        <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">
+                          Factory Install Add-Ons
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                          {EXTRA_INSTALL_OPTIONS.map((extra) => {
+                            const isSelected = selectedExtraInstalls.includes(extra.id);
+                            const disabled = extra.cabChassisOnly && wheelConfig !== 'cab-chassis';
+                            return (
+                              <button
+                                key={extra.id}
+                                type="button"
+                                disabled={disabled}
+                                aria-pressed={isSelected}
+                                onClick={() => toggleExtraInstall(extra)}
+                                className={`p-2.5 rounded-lg border text-left transition flex items-start justify-between gap-2 ${
+                                  disabled
+                                    ? 'border-[#222222] bg-[#121212] opacity-50 cursor-not-allowed'
+                                    : isSelected
+                                    ? 'border-[#FC5716] bg-[#1b1613] cursor-pointer'
+                                    : 'border-[#2c2c2c] bg-[#1a1a1a] hover:border-gray-500 cursor-pointer'
+                                }`}
+                              >
+                                <div>
+                                  <div className="text-xs font-bold text-white">{extra.name}</div>
+                                  <div className="text-[10px] text-gray-400 mt-0.5">{extra.note}</div>
+                                  {showPrices && (
+                                    <div className="text-[11px] font-semibold text-[#FC5716] mt-1">
+                                      +${extra.price}
+                                    </div>
+                                  )}
                                 </div>
-                              )}
-                            </div>
-                            <span
-                              className={`w-4 h-4 rounded flex items-center justify-center shrink-0 border mt-0.5 ${
-                                isSelected
-                                  ? 'bg-[#FC5716] border-[#FC5716] text-black'
-                                  : 'border-[#3a3a3a] bg-[#121212] text-transparent'
-                              }`}
-                            >
-                              <Check className="w-3 h-3 stroke-[3]" />
-                            </span>
-                          </button>
-                        );
-                      })}
+                                <span
+                                  className={`w-4 h-4 rounded flex items-center justify-center shrink-0 border mt-0.5 ${
+                                    isSelected
+                                      ? 'bg-[#FC5716] border-[#FC5716] text-black'
+                                      : 'border-[#3a3a3a] bg-[#121212] text-transparent'
+                                  }`}
+                                >
+                                  <Check className="w-3 h-3 stroke-[3]" />
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">
+                          Table 2 Price Deductions (Carry-Out, Raw Steel, Pre-Removed Bed)
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                          {TABLE2_DEDUCTION_OPTIONS.map((ded) => {
+                            const isSelected = selectedDeductions.includes(ded.id);
+                            const disabled = Boolean(ded.woodTrexOnly && deckType === 'steel');
+                            return (
+                              <button
+                                key={ded.id}
+                                type="button"
+                                disabled={disabled}
+                                aria-pressed={isSelected}
+                                onClick={() => toggleDeduction(ded)}
+                                className={`p-2.5 rounded-lg border text-left transition flex items-start justify-between gap-2 ${
+                                  disabled
+                                    ? 'border-[#222222] bg-[#121212] opacity-50 cursor-not-allowed'
+                                    : isSelected
+                                    ? 'border-emerald-500 bg-emerald-950/30 cursor-pointer'
+                                    : 'border-[#2c2c2c] bg-[#1a1a1a] hover:border-gray-500 cursor-pointer'
+                                }`}
+                              >
+                                <div>
+                                  <div className="text-xs font-bold text-white">{ded.name}</div>
+                                  <div className="text-[10px] text-gray-400 mt-0.5">{ded.note}</div>
+                                  {showPrices && (
+                                    <div className="text-[11px] font-semibold text-emerald-400 mt-1">
+                                      {ded.getPriceLabel(deckType)}
+                                    </div>
+                                  )}
+                                </div>
+                                <span
+                                  className={`w-4 h-4 rounded flex items-center justify-center shrink-0 border mt-0.5 ${
+                                    isSelected
+                                      ? 'bg-emerald-500 border-emerald-500 text-black'
+                                      : 'border-[#3a3a3a] bg-[#121212] text-transparent'
+                                  }`}
+                                >
+                                  <Check className="w-3 h-3 stroke-[3]" />
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1536,7 +1784,7 @@ export default function App() {
                 <div className="mt-5 pt-4 border-t border-[#222222] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <div className="text-xs text-gray-300">
                     <span className="font-bold text-white">Selected Setup:</span>{' '}
-                    {truckYear} {resolvedTruckName} ({wheelConfig.toUpperCase()} / {bedLengthLabel}) -{' '}
+                    {truckYear} {resolvedTruckName} ({wheelConfigLabel} / {bedLengthLabel}) -{' '}
                     <span className="text-[#FC5716] font-semibold">
                       {bedStyleLabel}, {deckTypeLabel}
                     </span>
@@ -1602,6 +1850,7 @@ export default function App() {
                     <button
                       key={mode.id}
                       type="button"
+                      aria-pressed={previewViewMode === mode.id}
                       onClick={() => setPreviewViewMode(mode.id)}
                       className={`flex-1 py-1.5 px-2 rounded-md text-xs font-semibold transition cursor-pointer text-center ${
                         previewViewMode === mode.id
@@ -1628,7 +1877,7 @@ export default function App() {
                     </p>
                   </div>
                 ) : isAiGenerating ? (
-                  <div className="relative w-full h-full">
+                  <div className="relative w-full h-full" aria-live="polite">
                     <img
                       src={uploadedImage}
                       alt="Generating flatbed preview"
@@ -1749,6 +1998,14 @@ export default function App() {
                       + {label}
                     </span>
                   ))}
+                  {priceBreakdown.itemizedDeductions.map((ded) => (
+                    <span
+                      key={ded.label}
+                      className="px-2.5 py-1 rounded-md bg-emerald-950/50 border border-emerald-700/40 text-xs font-medium text-emerald-300"
+                    >
+                      {ded.label} (-${ded.amount})
+                    </span>
+                  ))}
                 </div>
 
                 {/* Optional Price Sheet Breakdown */}
@@ -1756,7 +2013,7 @@ export default function App() {
                   <div className="mt-3 pt-2.5 border-t border-[#2a2a2a] text-xs space-y-1">
                     <div className="flex justify-between text-gray-300">
                       <span>
-                        {bedStyleLabel} - {deckTypeLabel} ({wheelConfig.toUpperCase()}):
+                        {bedStyleLabel} - {deckTypeLabel} ({wheelConfigLabel}):
                       </span>
                       <span className="font-semibold text-white">
                         {priceBreakdown.basePrice !== null
@@ -1776,12 +2033,12 @@ export default function App() {
                         <span>+${item.price.toLocaleString()}</span>
                       </div>
                     ))}
-                    {priceBreakdown.tacomaDeduction > 0 && (
-                      <div className="flex justify-between text-emerald-400">
-                        <span>Toyota Tacoma Base Deduction:</span>
-                        <span>-${priceBreakdown.tacomaDeduction}</span>
+                    {priceBreakdown.itemizedDeductions.map((ded) => (
+                      <div key={ded.label} className="flex justify-between text-emerald-400">
+                        <span>{ded.label}:</span>
+                        <span>-${ded.amount.toLocaleString()}</span>
                       </div>
-                    )}
+                    ))}
                     <div className="flex justify-between items-center pt-1.5 border-t border-[#2e2e2e] font-bold text-sm text-white">
                       <span>Estimated Installed Total:</span>
                       <span className="text-[#FC5716]">
@@ -1801,24 +2058,27 @@ export default function App() {
                   disabled={!uploadedImage || isAiGenerating}
                   onClick={handleGenerateAiFlatbed}
                   className={`w-full py-3.5 px-4 rounded-xl font-heading font-bold text-base tracking-wide transition flex items-center justify-center gap-2 cursor-pointer ${
-                    aiGeneratedImage
+                    aiGeneratedImage && !isRenderOutdated
                       ? 'bg-[#222222] hover:bg-[#2c2c2c] text-white border border-[#3a3a3a]'
                       : 'bg-[#FC5716] hover:bg-[#ff682b] text-black shadow-lg shadow-[#FC5716]/25'
                   }`}
                 >
-                  {aiGeneratedImage ? (
+                  {isAiGenerating ? (
                     <>
-                      <RotateCcw className="w-4 h-4 text-[#FC5716]" />
+                      <Sparkles className="w-4 h-4 fill-black" />
+                      <span>AI Generating Your Flatbed...</span>
+                    </>
+                  ) : aiGeneratedImage ? (
+                    <>
+                      <RotateCcw
+                        className={`w-4 h-4 ${isRenderOutdated ? 'text-black' : 'text-[#FC5716]'}`}
+                      />
                       <span>Re-Run AI With Updated Options</span>
                     </>
                   ) : (
                     <>
                       <Sparkles className="w-4 h-4 fill-black" />
-                      <span>
-                        {isAiGenerating
-                          ? 'AI Generating Your Flatbed...'
-                          : 'Generate AI Flatbed Preview'}
-                      </span>
+                      <span>Generate AI Flatbed Preview</span>
                     </>
                   )}
                 </button>
@@ -1904,7 +2164,10 @@ export default function App() {
                     </div>
 
                     {validationError && (
-                      <div className="p-2.5 rounded-lg bg-red-950/80 border border-red-700/60 text-xs text-red-200">
+                      <div
+                        role="alert"
+                        className="p-2.5 rounded-lg bg-red-950/80 border border-red-700/60 text-xs text-red-200"
+                      >
                         {validationError}
                       </div>
                     )}
@@ -1921,6 +2184,7 @@ export default function App() {
                           id="quote-name"
                           type="text"
                           required
+                          maxLength={80}
                           placeholder="John Smith"
                           value={formData.name}
                           onChange={(e) => setFormData({ ...formData, name: e.target.value })}
@@ -1938,6 +2202,7 @@ export default function App() {
                           id="quote-phone"
                           type="tel"
                           required
+                          maxLength={25}
                           placeholder="(843) 555-0199"
                           value={formData.phone}
                           onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
@@ -1958,6 +2223,7 @@ export default function App() {
                           id="quote-email"
                           type="email"
                           required
+                          maxLength={120}
                           placeholder="john@example.com"
                           value={formData.email}
                           onChange={(e) => setFormData({ ...formData, email: e.target.value })}
@@ -1969,11 +2235,12 @@ export default function App() {
                           htmlFor="quote-cityzip"
                           className="block text-[11px] font-semibold text-gray-300 uppercase mb-1"
                         >
-                          City / Zip Code
+                          City / Zip Code (Optional)
                         </label>
                         <input
                           id="quote-cityzip"
                           type="text"
+                          maxLength={60}
                           placeholder="Charleston, SC"
                           value={formData.cityZip}
                           onChange={(e) => setFormData({ ...formData, cityZip: e.target.value })}
@@ -1992,6 +2259,7 @@ export default function App() {
                       <textarea
                         id="quote-notes"
                         rows={2}
+                        maxLength={600}
                         placeholder="Any custom toolboxes, rack cutouts, or install timing preferences..."
                         value={formData.notes}
                         onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
