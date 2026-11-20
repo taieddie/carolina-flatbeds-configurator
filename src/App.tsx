@@ -285,6 +285,8 @@ export default function App() {
 
   // Step 3: AI Generation & Quote Request state
   const [aiGeneratedImage, setAiGeneratedImage] = useState<string | null>(null);
+  const [renderedConfigKey, setRenderedConfigKey] = useState<string | null>(null);
+  const [renderedSummaryLabel, setRenderedSummaryLabel] = useState<string>('');
   const [isAiGenerating, setIsAiGenerating] = useState<boolean>(false);
   const [aiStepText, setAiStepText] = useState<string>('Removing factory pickup bed...');
   const [aiError, setAiError] = useState<string | null>(null);
@@ -294,6 +296,7 @@ export default function App() {
   const [isQuoteFormOpen, setIsQuoteFormOpen] = useState<boolean>(false);
   const [quoteSubmitted, setQuoteSubmitted] = useState<boolean>(false);
   const [submittedRefId, setSubmittedRefId] = useState<string>('');
+  const [submittedSummaryText, setSubmittedSummaryText] = useState<string>('');
   const [validationError, setValidationError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     name: '',
@@ -306,6 +309,9 @@ export default function App() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const previewCardRef = useRef<HTMLDivElement>(null);
   const quoteSectionRef = useRef<HTMLDivElement>(null);
+
+  const currentConfigKey = `${uploadedImage || ''}|${bedStyle}|${deckType}|${wheelConfig}|${selectedAddOns.slice().sort().join(',')}`;
+  const isRenderOutdated = Boolean(aiGeneratedImage && renderedConfigKey && renderedConfigKey !== currentConfigKey);
 
   // Clean up bed-length-restricted add-ons when switching between Short Bed and Long Bed
   useEffect(() => {
@@ -436,9 +442,6 @@ export default function App() {
   const processImageFile = (file: File) => {
     setUploadError(null);
     setAiError(null);
-    setAiGeneratedImage(null);
-    setIsQuoteFormOpen(false);
-    setQuoteSubmitted(false);
 
     if (file.size > 10 * 1024 * 1024) {
       setUploadError('Image size exceeds 10MB limit. Please upload a smaller photo.');
@@ -452,6 +455,11 @@ export default function App() {
       if (fileInputRef.current) fileInputRef.current.value = '';
       return;
     }
+
+    setAiGeneratedImage(null);
+    setRenderedConfigKey(null);
+    setIsQuoteFormOpen(false);
+    setQuoteSubmitted(false);
 
     const reader = new FileReader();
     reader.onerror = () => {
@@ -479,6 +487,8 @@ export default function App() {
           canvas.height = targetH;
           const ctx = canvas.getContext('2d');
           if (ctx) {
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, targetW, targetH);
             ctx.drawImage(img, 0, 0, targetW, targetH);
             const sanitizedDataUrl = canvas.toDataURL('image/jpeg', 0.92);
             setUploadedImage(sanitizedDataUrl);
@@ -523,7 +533,11 @@ export default function App() {
     setTruckMakeModel(sample.makeModel);
     setWheelConfig(sample.wheelConfig);
     setBedLength(sample.bedLength);
+    setBedStyle(sample.defaultStyle);
+    setDeckType(sample.defaultDeck);
+    setSelectedAddOns([]);
     setAiGeneratedImage(null);
+    setRenderedConfigKey(null);
     setIsQuoteFormOpen(false);
     setQuoteSubmitted(false);
   };
@@ -613,6 +627,8 @@ export default function App() {
         clearTimeout(timer1);
         clearTimeout(timer2);
         setAiGeneratedImage(exactSampleMatch);
+        setRenderedConfigKey(currentConfigKey);
+        setRenderedSummaryLabel(`${bedStyleLabel} (${deckTypeLabel})`);
         return;
       }
 
@@ -621,13 +637,17 @@ export default function App() {
       if (uploadedImage.startsWith('./') || uploadedImage.startsWith('/')) {
         try {
           const imgResp = await fetch(uploadedImage);
-          const blob = await imgResp.blob();
-          imagePayload = await new Promise<string>((resolve, reject) => {
-            const r = new FileReader();
-            r.onloadend = () => resolve(r.result as string);
-            r.onerror = reject;
-            r.readAsDataURL(blob);
-          });
+          if (imgResp.ok) {
+            const blob = await imgResp.blob();
+            imagePayload = await new Promise<string>((resolve, reject) => {
+              const r = new FileReader();
+              r.onloadend = () => resolve(r.result as string);
+              r.onerror = reject;
+              r.readAsDataURL(blob);
+            });
+          } else {
+            imagePayload = new URL(uploadedImage.replace('./', ''), window.location.href).href;
+          }
         } catch {
           imagePayload = new URL(uploadedImage.replace('./', ''), window.location.href).href;
         }
@@ -665,6 +685,8 @@ export default function App() {
         const fallback = getSampleFallbackImage();
         if (fallback) {
           setAiGeneratedImage(fallback);
+          setRenderedConfigKey(currentConfigKey);
+          setRenderedSummaryLabel(`${bedStyleLabel} (${deckTypeLabel})`);
           return;
         }
         throw new Error('AI generator is currently busy. Please try again in a moment.');
@@ -673,10 +695,14 @@ export default function App() {
       const data = await response.json();
       if (data.imageUrl) {
         setAiGeneratedImage(data.imageUrl);
+        setRenderedConfigKey(currentConfigKey);
+        setRenderedSummaryLabel(`${bedStyleLabel} (${deckTypeLabel})`);
       } else {
         const fallback = getSampleFallbackImage();
         if (fallback) {
           setAiGeneratedImage(fallback);
+          setRenderedConfigKey(currentConfigKey);
+          setRenderedSummaryLabel(`${bedStyleLabel} (${deckTypeLabel})`);
           return;
         }
         throw new Error(data.error || 'No image returned from AI generator.');
@@ -687,6 +713,8 @@ export default function App() {
       const fallback = getSampleFallbackImage();
       if (fallback) {
         setAiGeneratedImage(fallback);
+        setRenderedConfigKey(currentConfigKey);
+        setRenderedSummaryLabel(`${bedStyleLabel} (${deckTypeLabel})`);
       } else {
         setAiError(
           err.message || 'Could not complete AI preview. Please try one of the sample trucks or retry.'
@@ -719,8 +747,9 @@ export default function App() {
       setValidationError('Please enter your full name.');
       return;
     }
-    if (formData.phone.trim().length < 7) {
-      setValidationError('Please enter a valid phone number.');
+    const phoneDigits = formData.phone.replace(/\D/g, '');
+    if (phoneDigits.length < 7) {
+      setValidationError('Please enter a valid 10-digit phone number.');
       return;
     }
     if (!formData.email.trim().includes('@')) {
@@ -739,6 +768,11 @@ export default function App() {
       }),
       ...selectedExtraInstalls.map((id) => EXTRA_INSTALL_OPTIONS.find((e) => e.id === id)?.name)
     ].filter(Boolean) as string[];
+
+    const summarySnapshot = `${truckYear} ${resolvedTruckName} (${bedStyleLabel}, ${deckTypeLabel}${
+      selectedAddOnNames.length > 0 ? ' + ' + selectedAddOnNames.join(', ') : ''
+    })`;
+    setSubmittedSummaryText(summarySnapshot);
 
     try {
       const inquiryPayload = {
@@ -1654,7 +1688,7 @@ export default function App() {
                         <span>
                           {previewViewMode === 'before'
                             ? 'Original Truck Photo'
-                            : `AI Render: ${bedStyleLabel} (${deckTypeLabel})`}
+                            : `AI Render: ${renderedSummaryLabel || `${bedStyleLabel} (${deckTypeLabel})`}`}
                         </span>
                       </div>
                     </div>
@@ -1673,9 +1707,18 @@ export default function App() {
                 )}
               </div>
 
+              {isRenderOutdated && !isAiGenerating && (
+                <div className="mt-2.5 px-3 py-2 rounded-lg bg-[#FC5716]/15 border border-[#FC5716]/40 text-xs text-[#FC5716] font-medium flex items-center justify-between gap-2">
+                  <span>Options changed - click below to refresh your AI preview</span>
+                </div>
+              )}
+
               {/* Error alert if AI fails */}
               {aiError && (
-                <div className="mt-3 p-3 rounded-lg bg-red-950/70 border border-red-700/50 text-xs text-red-200">
+                <div
+                  role="alert"
+                  className="mt-3 p-3 rounded-lg bg-red-950/70 border border-red-700/50 text-xs text-red-200"
+                >
                   {aiError}
                 </div>
               )}
@@ -1825,15 +1868,11 @@ export default function App() {
                       QUOTE REQUEST RECEIVED ({submittedRefId})
                     </h3>
                     <p className="text-xs sm:text-sm text-gray-300 max-w-md mx-auto leading-relaxed">
-                      Thank you, <span className="text-white font-semibold">{formData.name}</span>. We have received your{' '}
+                      Thank you, <span className="text-white font-semibold">{formData.name}</span>. Carolina Flatbeds has received your{' '}
                       <span className="text-[#FC5716] font-semibold">
-                        {truckYear} {resolvedTruckName}
+                        {submittedSummaryText || `${truckYear} ${resolvedTruckName}`}
                       </span>{' '}
-                      configuration ({bedStyleLabel}, {deckTypeLabel}
-                      {allSelectedAddOnLabels.length > 0
-                        ? ` + ${allSelectedAddOnLabels.join(', ')}`
-                        : ''}
-                      ) and will follow up with your build quote shortly.
+                      quote request and will follow up with your build quote shortly.
                     </p>
                     <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
                       <button
