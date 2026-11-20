@@ -1,301 +1,297 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Truck,
-  Wrench,
   Camera,
-  Layers,
   CheckCircle2,
-  ShieldCheck,
-  Eye,
-  ArrowRight,
-  RotateCcw,
-  Printer,
-  Check,
   Sparkles,
-  Download
+  Download,
+  RotateCcw,
+  ChevronDown,
+  ChevronUp,
+  Check,
+  Phone,
+  FileText,
+  ArrowRight,
+  SlidersHorizontal,
+  Image as ImageIcon
 } from 'lucide-react';
 
-// Truck platforms
-interface TruckPlatform {
+type WheelConfig = 'srw' | 'dually' | 'cab-chassis';
+type BedLength = 'short' | 'long';
+type BedStyle = 'standard' | 'full-skirted';
+type DeckType = 'wood' | 'trex' | 'steel';
+
+interface SampleTruck {
   id: string;
-  make: string;
-  model: string;
-  years: string;
-  badge: string;
+  label: string;
+  shortLabel: string;
+  year: string;
+  makeModel: string;
+  wheelConfig: WheelConfig;
+  bedLength: BedLength;
+  defaultStyle: BedStyle;
+  defaultDeck: DeckType;
+  beforeImage: string;
+  fallbackAfterImage: string;
 }
 
-const TRUCK_PLATFORMS: TruckPlatform[] = [
-  { id: 'gmc-sierra-hd', make: 'GMC', model: 'Sierra 2500/3500 HD', years: '2020-2026', badge: 'Duramax Turbo-Diesel' },
-  { id: 'chevy-silverado-hd', make: 'Chevrolet', model: 'Silverado 2500/3500 HD', years: '2020-2026', badge: 'Allison 10-Speed HD' },
-  { id: 'ford-superduty', make: 'Ford', model: 'F-250 / F-350 Super Duty', years: '2017-2026', badge: '6.7L Power Stroke V8' },
-  { id: 'ram-hd', make: 'Ram', model: '2500 / 3500 Heavy Duty', years: '2019-2026', badge: '6.7L Cummins High-Output' }
+const SAMPLE_TRUCKS: SampleTruck[] = [
+  {
+    id: 'f250',
+    label: '2023 Ford F-250 Super Duty',
+    shortLabel: '2023 Ford F-250',
+    year: '2023',
+    makeModel: 'Ford F-250 / F-350 Super Duty',
+    wheelConfig: 'srw',
+    bedLength: 'short',
+    defaultStyle: 'standard',
+    defaultDeck: 'wood',
+    beforeImage: './assets/stock_f250.jpg',
+    fallbackAfterImage: './assets/f250_heritage_wood.jpg'
+  },
+  {
+    id: 'silverado',
+    label: '2024 Chevy Silverado 2500HD',
+    shortLabel: '2024 Silverado 2500HD',
+    year: '2024',
+    makeModel: 'Chevy Silverado 2500 / 3500 HD',
+    wheelConfig: 'srw',
+    bedLength: 'short',
+    defaultStyle: 'standard',
+    defaultDeck: 'wood',
+    beforeImage: './assets/stock_silverado_2500hd.jpg',
+    fallbackAfterImage: './assets/after_silverado_heritage_wood.jpg'
+  },
+  {
+    id: 'sierra',
+    label: '2023 GMC Sierra Denali HD',
+    shortLabel: '2023 GMC Sierra HD',
+    year: '2023',
+    makeModel: 'GMC Sierra 2500 / 3500 HD',
+    wheelConfig: 'srw',
+    bedLength: 'long',
+    defaultStyle: 'standard',
+    defaultDeck: 'steel',
+    beforeImage: './assets/stock_sierra_2500hd.jpg',
+    fallbackAfterImage: './assets/after_sierra_standard_utility.jpg'
+  },
+  {
+    id: 'ram',
+    label: '2024 Ram 2500 Heavy Duty',
+    shortLabel: '2024 Ram 2500',
+    year: '2024',
+    makeModel: 'Ram 2500 / 3500 Heavy Duty',
+    wheelConfig: 'srw',
+    bedLength: 'short',
+    defaultStyle: 'full-skirted',
+    defaultDeck: 'steel',
+    beforeImage: './assets/stock_ram_2500.jpg',
+    fallbackAfterImage: './assets/after_ram_deluxe_skirted.jpg'
+  }
 ];
 
-// Flatbed models
-interface FlatbedModel {
+const TRUCK_MAKE_MODELS = [
+  'Ford F-250 / F-350 Super Duty',
+  'Ford F-150',
+  'Chevy Silverado 2500 / 3500 HD',
+  'Chevy Silverado 1500',
+  'GMC Sierra 2500 / 3500 HD',
+  'Ram 2500 / 3500 Heavy Duty',
+  'Toyota Tacoma',
+  'Other / Custom Model'
+];
+
+const TRUCK_YEARS = Array.from({ length: 32 }, (_, i) => (2026 - i).toString());
+
+interface AddOnOption {
   id: string;
   name: string;
-  tagline: string;
-  basePriceMin: number;
-  basePriceMax: number;
-  description: string;
-  recommendedFor: string;
-  features: string[];
-  deckOptions: string[];
-}
-
-const FLATBED_MODELS: FlatbedModel[] = [
-  {
-    id: 'deluxe-skirted',
-    name: 'Deluxe Skirted Bed',
-    tagline: 'Sleek contoured body skirts with lockable underbed toolboxes',
-    basePriceMin: 5400,
-    basePriceMax: 6200,
-    description: 'Precision-formed side skirts hugging factory body lines. Dual lockable weatherproof front toolboxes, integrated drop receiver, and high-intensity oval LED lighting.',
-    recommendedFor: 'Commercial hauling, ranch work, daily drivers who want zero exposed frame.',
-    features: ['Integrated Underbody Toolboxes', 'Contoured Fender Arches', 'Sealed LED Stop/Turn/Tails', '30K lb Gooseneck Well'],
-    deckOptions: ['Steel Diamond Plate', 'Textured Powdercoat', 'Stained Hardwood Inlays']
-  },
-  {
-    id: 'standard-work',
-    name: 'Standard Utility Bed',
-    tagline: 'Heavy-duty steel flat deck with stake pockets and tie-down rails',
-    basePriceMin: 4200,
-    basePriceMax: 4800,
-    description: 'The workhorse flatbed. Full perimeter rub rails, internal stake pockets, 1/8" diamond-plate steel deck, and heavy-gauge tapered rear for extreme trailer clearance.',
-    recommendedFor: 'Farming, equipment transport, general contracting, and heavy job site utility.',
-    features: ['Perimeter Rub Rail & Stake Pockets', 'Tapered Tail Corners', 'Recessed Gooseneck Hatch', 'Heavy C-Channel Sills'],
-    deckOptions: ['Steel Diamond Plate', 'Industrial Black Matte']
-  },
-  {
-    id: 'heritage-wood',
-    name: 'Heritage Wood Inlay',
-    tagline: 'Custom stained hardwood timber deck with satin powdercoat',
-    basePriceMin: 5800,
-    basePriceMax: 6600,
-    description: 'Premium exterior-grade tongue-and-groove hardwood planks sealed with marine UV finish, framed in industrial 10-gauge structural steel. Showroom aesthetics with job-site strength.',
-    recommendedFor: 'Custom builds, weekend haulers, outdoor lifestyle rigs, and luxury HD trucks.',
-    features: ['Marine-Grade Sealed Hardwood', 'Stainless Steel Deck Fasteners', 'Louvered Sunshade Rack', 'Flush Tie-Down D-Rings'],
-    deckOptions: ['Stained Hardwood Inlays', 'Weathered Cedar', 'Dark Walnut']
-  },
-  {
-    id: 'dually-hd-skirt',
-    name: 'Heavy Duty Dually (DRW)',
-    tagline: 'Wide flare body skirts designed specifically for dual rear wheel chassis',
-    basePriceMin: 5900,
-    basePriceMax: 6800,
-    description: 'Flared rear skirts engineered to match wide dual-rear-wheel axles. Dual rear marker lights, oversized front underbody boxes, and reinforced rear hitch plate.',
-    recommendedFor: 'Hotshot haulers, livestock trailers, 5th-wheel campers, and heavy commercial rigs.',
-    features: ['Wide DRW Flared Skirting', 'Oversized Front & Rear Toolboxes', 'Dual Clearance Markers', '32K lb Commercial Hitch'],
-    deckOptions: ['Steel Diamond Plate', 'Stained Hardwood Inlays']
-  }
-];
-
-// Curated authentic project builds for live rendering
-interface BuildAsset {
-  id: string;
-  title: string;
-  truck: string;
-  make: 'GMC' | 'Chevrolet' | 'Ford' | 'Ram' | 'Commercial HD';
-  bedType: string;
+  shortDesc: string;
   image: string;
-  angle: 'Three-Quarter Rear' | 'Direct Rear';
-  options: string[];
+  skirtedImage?: string;
+  standardOnly?: boolean;
+  bedRestriction?: 'long-only' | 'short-only';
+  priceLabel: string;
+  getPrice: (bedLength: BedLength, dRingCount: number) => number;
 }
 
-interface VisualHotspot {
+const VISUAL_ADDONS: AddOnOption[] = [
+  {
+    id: 'underbody-toolboxes',
+    name: 'Underbody Toolboxes',
+    shortDesc: 'Lockable T-handle underbody toolboxes (Pair)',
+    image: './assets/options/card_underbody_toolboxes.jpg',
+    standardOnly: true,
+    priceLabel: '$1,125/pr LB | $995/pr SB',
+    getPrice: (bedLength) => (bedLength === 'long' ? 1125 : 995)
+  },
+  {
+    id: 'step-fender',
+    name: 'Step Fender Add-on',
+    shortDesc: 'Contoured lower step fender panel ahead of rear wheel',
+    image: './assets/options/card_step_fender.jpg',
+    standardOnly: true,
+    bedRestriction: 'long-only',
+    priceLabel: '$275 (Longbed only)',
+    getPrice: () => 275
+  },
+  {
+    id: 'octagon-fenders',
+    name: 'Octagon Fenders',
+    shortDesc: 'Contoured octagonal steel fender skirts over rear wheels',
+    image: './assets/options/card_octagon_fenders.jpg',
+    standardOnly: true,
+    priceLabel: '$275',
+    getPrice: () => 275
+  },
+  {
+    id: 'shortbed-toolbox-fender',
+    name: 'Shortbed Toolbox Fender',
+    shortDesc: 'Integrated lower fender skirt for shortbed toolbox fitment',
+    image: './assets/options/card_shortbed_toolbox_fender.jpg',
+    standardOnly: true,
+    bedRestriction: 'short-only',
+    priceLabel: '$275 (Shortbed only)',
+    getPrice: () => 275
+  },
+  {
+    id: 'bed-rails',
+    name: 'Bed Rails',
+    shortDesc: 'Low-profile perimeter upper steel side bed rails',
+    image: './assets/options/card_bed_rails.jpg',
+    skirtedImage: './assets/options/card_bed_rails_skirted.jpg',
+    priceLabel: '$775',
+    getPrice: () => 775
+  },
+  {
+    id: 'cargo-ears',
+    name: 'Cargo Ears (3" Pair)',
+    shortDesc: 'Upper headache rack corner tie-down cargo ears',
+    image: './assets/options/card_cargo_ears.jpg',
+    priceLabel: '$35 (Pair)',
+    getPrice: () => 35
+  },
+  {
+    id: 'inset-drings',
+    name: 'Inset D-Rings',
+    shortDesc: 'Flush-mounted recessed deck tie-down D-rings',
+    image: './assets/options/card_inset_drings.jpg',
+    priceLabel: '$25/ea.',
+    getPrice: (_, dRingCount) => 25 * dRingCount
+  },
+  {
+    id: 'rub-rails',
+    name: 'Rub Rails',
+    shortDesc: 'Side stake pockets and heavy outer protective rub rails',
+    image: './assets/options/card_rub_rails.jpg',
+    skirtedImage: './assets/options/card_rub_rails_skirted.jpg',
+    priceLabel: '$325',
+    getPrice: () => 325
+  },
+  {
+    id: 'gooseneck-ball',
+    name: 'Gooseneck Ball Install (30K)',
+    shortDesc: '30K turnover ball in recessed well (free if using existing ball)',
+    image: './assets/options/card_gooseneck_ball.jpg',
+    priceLabel: '$375',
+    getPrice: () => 375
+  },
+  {
+    id: 'headache-lights',
+    name: 'Headache Rack Stop/Turn/Tail',
+    shortDesc: 'Upper headache rack red LED stop/turn/tail light bars',
+    image: './assets/options/card_headache_lights.jpg',
+    priceLabel: '$195',
+    getPrice: () => 195
+  }
+];
+
+interface ExtraInstallOption {
   id: string;
-  title: string;
-  desc: string;
-  top: string;
-  left: string;
+  name: string;
+  note: string;
+  price: number;
+  cabChassisOnly?: boolean;
 }
 
-const VISUAL_HOTSPOTS: VisualHotspot[] = [
+const EXTRA_INSTALL_OPTIONS: ExtraInstallOption[] = [
   {
-    id: 'rack',
-    title: 'Cab Protector Headache Rack',
-    desc: 'Heavy-gauge steel louvers shield cab rear glass while maintaining visibility and rear tie-down strength.',
-    top: '30%',
-    left: '42%'
+    id: 'backup-camera',
+    name: 'Backup Camera Install',
+    note: 'Factory camera required',
+    price: 50
   },
   {
-    id: 'deck',
-    title: 'Heavy-Duty Deck Surface',
-    desc: 'Commercial 1/8" diamond plate steel or stained marine-sealed hardwood inlays with flush D-rings.',
-    top: '48%',
-    left: '28%'
+    id: 'parking-sensors',
+    name: 'Parking Sensor Install',
+    note: 'Factory sensors required',
+    price: 150
   },
   {
-    id: 'boxes',
-    title: 'Underbody Toolboxes',
-    desc: 'Weatherproof lockable toolboxes contoured into side skirts, keeping gear clean and out of sight.',
-    top: '64%',
-    left: '48%'
-  },
-  {
-    id: 'hitch',
-    title: 'Commercial Hitch & Oval LEDs',
-    desc: 'Reinforced 30K gooseneck well and heavy Class V rear receiver with sealed oval LED stop/turn lamps.',
-    top: '62%',
-    left: '16%'
+    id: 'class-v-receiver',
+    name: 'Class V Rear Receiver',
+    note: 'Cab/Chassis only',
+    price: 450,
+    cabChassisOnly: true
   }
 ];
 
-const BUILD_ASSETS: BuildAsset[] = [
-  {
-    id: 'denali-deluxe',
-    title: '2022 GMC Sierra Denali HD - Deluxe Skirted Flatbed',
-    truck: 'GMC Sierra 2500 HD',
-    make: 'GMC',
-    bedType: 'deluxe-skirted',
-    image: './assets/denali_hd.jpg',
-    angle: 'Three-Quarter Rear',
-    options: ['Louvered Headache Rack', 'Dual LED Work Lights', 'Underbody Box', 'Octagon Fenders']
+// Exact base model + install pricing table from Mark's Standard & Full Skirted PDFs
+const BASE_PRICE_TABLE: Record<
+  BedStyle,
+  Record<DeckType, { srw: number; dually: number; install: number }>
+> = {
+  standard: {
+    wood: { srw: 5495, dually: 5850, install: 775 },
+    trex: { srw: 5775, dually: 6150, install: 775 },
+    steel: { srw: 6595, dually: 6950, install: 625 }
   },
-  {
-    id: 'wood-inlay-rear',
-    title: 'Custom Hardwood Inlay Flatbed - Direct Rear Deck View',
-    truck: 'Commercial HD Deck',
-    make: 'Commercial HD',
-    bedType: 'heritage-wood',
-    image: './assets/img_5114_hd.jpg',
-    angle: 'Direct Rear',
-    options: ['Stained Hardwood Deck', 'Louvered Headache Rack', 'Tapered Tail Corners', 'Flush Hatch']
-  },
-  {
-    id: 'textured-wood-rear',
-    title: 'Textured Gunmetal Powdercoat - Heritage Wood Deck',
-    truck: 'Commercial HD Deck',
-    make: 'Commercial HD',
-    bedType: 'heritage-wood',
-    image: './assets/img_1167_hd.jpg',
-    angle: 'Direct Rear',
-    options: ['Gunmetal Textured Finish', 'Wood Decking', 'ddfab.co Mud Flaps', 'Dual LED Tails']
-  },
-  {
-    id: 'chevy-white-standard',
-    title: 'Chevrolet Silverado HD Crew Cab - Standard Utility Bed',
-    truck: 'Chevy Silverado HD',
-    make: 'Chevrolet',
-    bedType: 'standard-work',
-    image: './assets/img_1404_hd.jpg',
-    angle: 'Three-Quarter Rear',
-    options: ['Front Toolboxes', 'Perimeter Rub Rail', 'Headache Rack', 'Black Powdercoat']
-  },
-  {
-    id: 'chevy-black-diamond',
-    title: 'Black Silverado 2500 HD - Steel Diamond Plate Work Bed',
-    truck: 'Chevy Silverado HD',
-    make: 'Chevrolet',
-    bedType: 'standard-work',
-    image: './assets/img_0862_hd.jpg',
-    angle: 'Three-Quarter Rear',
-    options: ['Diamond Plate Steel', 'Stake Pockets', 'LED Work Lights', 'Rear Hitch Plate']
-  },
-  {
-    id: 'ram-underbed-ramps',
-    title: 'Heavy Duty Flatbed with Underbed Slide-Out Ramps',
-    truck: 'Ram Heavy Duty',
-    make: 'Ram',
-    bedType: 'standard-work',
-    image: './assets/img_2878_hd.jpg',
-    angle: 'Direct Rear',
-    options: ['Slide-Out Loading Ramps', 'Fold-Down Stake Sides', 'LED Flood Lights', 'Heavy Receiver']
-  },
-  {
-    id: 'od-green-hauler',
-    title: 'Lowcountry Gunmetal / OD Green Deluxe Skirted Rig',
-    truck: 'Commercial HD Hauler',
-    make: 'Commercial HD',
-    bedType: 'deluxe-skirted',
-    image: './assets/img_1752_hd.jpg',
-    angle: 'Three-Quarter Rear',
-    options: ['OD Green Finish', 'Diamond Plate Deck', 'Flush Gooseneck Well', 'Dual Oval LED Tails']
-  },
-  {
-    id: 'stake-sides-gate',
-    title: 'Ford Super Duty - Fold-Down Removable Stake Bed Gates',
-    truck: 'Ford Super Duty',
-    make: 'Ford',
-    bedType: 'standard-work',
-    image: './assets/img_3228_hd.jpg',
-    angle: 'Direct Rear',
-    options: ['Fold-Down Stake Sides', 'Solid Mesh Headache Rack', 'High-Output Scene Lights']
-  },
-  {
-    id: 'dually-wood-deck',
-    title: 'DRW Dually Heavy-Duty Wood Deck Flatbed',
-    truck: 'Dually DRW HD',
-    make: 'Commercial HD',
-    bedType: 'dually-hd-skirt',
-    image: './assets/img_5113_hd.jpg',
-    angle: 'Direct Rear',
-    options: ['Flared Dually Skirt', 'Stained Wood Inlay', 'Dual Rear Wheels', 'Oversized Flaps']
-  },
-  {
-    id: 'silverado-duramax-skirt',
-    title: 'Silverado 2500 Duramax - Custom Cutout Side Skirt',
-    truck: 'Chevy Silverado HD',
-    make: 'Chevrolet',
-    bedType: 'deluxe-skirted',
-    image: './assets/img_2192_hd.jpg',
-    angle: 'Three-Quarter Rear',
-    options: ['Laser-Cut DURAMAX Skirt', 'Front Underbody Box', 'High Clearance Bumper', 'Fuel Wheels']
+  'full-skirted': {
+    wood: { srw: 7925, dually: 8275, install: 775 },
+    trex: { srw: 8195, dually: 8575, install: 775 },
+    steel: { srw: 8995, dually: 9375, install: 625 }
   }
-];
+};
 
 export default function App() {
-  // Navigation mode
-  const [activeTab, setActiveTab] = useState<'configurator' | 'upload'>('configurator');
+  // Step 1: Truck details & photo
+  const [truckMakeModel, setTruckMakeModel] = useState<string>('Ford F-250 / F-350 Super Duty');
+  const [customMakeModel, setCustomMakeModel] = useState<string>('');
+  const [truckYear, setTruckYear] = useState<string>('2023');
+  const [wheelConfig, setWheelConfig] = useState<WheelConfig>('srw');
+  const [bedLength, setBedLength] = useState<BedLength>('short');
 
-  // Configurator selections
-  const [selectedMake, setSelectedMake] = useState<string>('GMC');
-  const [selectedCab, setSelectedCab] = useState<string>('Crew Cab');
-  const [chassisType, setChassisType] = useState<'pickup-removal' | 'cab-chassis'>('pickup-removal');
-  const [selectedBedLength, setSelectedBedLength] = useState<string>('56" CA - Short Bed (6.5 ft)');
-  const [selectedModelId, setSelectedModelId] = useState<string>('deluxe-skirted');
-  const [selectedDeckFinish, setSelectedDeckFinish] = useState<string>('Steel Diamond Plate');
-  const [selectedHeadacheRack, setSelectedHeadacheRack] = useState<string>('Louvered Cab Protector');
-  const [hasWorkLights, setHasWorkLights] = useState<boolean>(true);
-  const [hasToolboxes, setHasToolboxes] = useState<boolean>(true);
-  const [hasStakeSides, setHasStakeSides] = useState<boolean>(false);
-  const [hasLoadingRamps, setHasLoadingRamps] = useState<boolean>(false);
-
-  // Background environment
-  const [backgroundScene, setBackgroundScene] = useState<'lowcountry' | 'warehouse' | 'studio'>('lowcountry');
-
-  // Active view angle filter
-  const [viewAngle, setViewAngle] = useState<'all' | 'Three-Quarter Rear' | 'Direct Rear'>('all');
-
-  // Selected preview asset
-  const [activeAssetId, setActiveAssetId] = useState<string>('denali-deluxe');
-
-  // Uploaded photo state
-  const [uploadedImage, setUploadedImage] = useState<string | null>(null);
-  const [overlayBedStyle, setOverlayBedStyle] = useState<string>('deluxe-skirted');
-  const [overlayOpacity, setOverlayOpacity] = useState<number>(95);
-  const [overlayScale, setOverlayScale] = useState<number>(100);
-  const [overlayOffsetX, setOverlayOffsetX] = useState<number>(0);
-  const [overlayOffsetY, setOverlayOffsetY] = useState<number>(0);
+  // Photo state (default to null so user clearly sees how to upload or click a sample truck, or pre-load sample if desired)
+  const [uploadedImage, setUploadedImage] = useState<string | null>('./assets/stock_f250.jpg');
+  const [activeSampleId, setActiveSampleId] = useState<string | null>('f250');
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const [showStockBedInUpload, setShowStockBedInUpload] = useState<boolean>(false);
+  const [isDraggingOver, setIsDraggingOver] = useState<boolean>(false);
 
-  // Generative AI Flatbed Engine state
+  // Step 2: Flatbed Options (1:1 with Mark's 2 PDFs)
+  const [bedStyle, setBedStyle] = useState<BedStyle>('standard');
+  const [deckType, setDeckType] = useState<DeckType>('wood');
+  const [selectedAddOns, setSelectedAddOns] = useState<string[]>([]);
+  const [dRingCount, setDRingCount] = useState<number>(4);
+  const [selectedExtraInstalls, setSelectedExtraInstalls] = useState<string[]>([]);
+  const [showExtraAccordion, setShowExtraAccordion] = useState<boolean>(false);
+
+  // Optional price sheet estimate visibility (default false so the UI stays simple & quote-focused)
+  const [showPrices, setShowPrices] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return new URLSearchParams(window.location.search).get('prices') === '1';
+    }
+    return false;
+  });
+
+  // Step 3: AI Generation & Quote Request state
   const [aiGeneratedImage, setAiGeneratedImage] = useState<string | null>(null);
   const [isAiGenerating, setIsAiGenerating] = useState<boolean>(false);
-  const [aiStepText, setAiStepText] = useState<string>('Scanning vehicle geometry & cab...');
+  const [aiStepText, setAiStepText] = useState<string>('Removing factory pickup bed...');
   const [aiError, setAiError] = useState<string | null>(null);
-  const [uploadFitMode, setUploadFitMode] = useState<'ai-concept' | 'ai-lora' | 'manual'>('ai-concept');
-  const [showComparisonView, setShowComparisonView] = useState<boolean>(false);
+  const [previewViewMode, setPreviewViewMode] = useState<'after' | 'before' | 'split'>('after');
 
-  // Feature hotspots state
-  const [showHotspots, setShowHotspots] = useState<boolean>(true);
-  const [activeHotspotId, setActiveHotspotId] = useState<string | null>(null);
-
-  // Quote modal
-  const [isQuoteModalOpen, setIsQuoteModalOpen] = useState<boolean>(false);
-  const [isPhotoQuote, setIsPhotoQuote] = useState<boolean>(false);
+  // Quote form state
+  const [isQuoteFormOpen, setIsQuoteFormOpen] = useState<boolean>(false);
   const [quoteSubmitted, setQuoteSubmitted] = useState<boolean>(false);
   const [submittedRefId, setSubmittedRefId] = useState<string>('');
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -303,96 +299,156 @@ export default function App() {
     name: '',
     phone: '',
     email: '',
-    companyName: '',
-    fleetSize: '1 Truck (Single Operator)',
-    preferredContact: 'Phone Call',
     cityZip: '',
-    truckYear: '2023',
-    truckVin: '',
-    timeline: 'Ready to install (1-2 weeks)',
     notes: ''
   });
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const previewCardRef = useRef<HTMLDivElement>(null);
+  const quoteSectionRef = useRef<HTMLDivElement>(null);
 
-  // Lookups
-  const currentModel = FLATBED_MODELS.find(m => m.id === selectedModelId) || FLATBED_MODELS[0];
-  const currentPlatform = TRUCK_PLATFORMS.find(p => p.make === selectedMake) || TRUCK_PLATFORMS[0];
+  // Clean up bed-length-restricted add-ons when switching between Short Bed and Long Bed
+  useEffect(() => {
+    setSelectedAddOns((prev) =>
+      prev.filter((id) => {
+        if (id === 'step-fender' && bedLength !== 'long') return false;
+        if (id === 'shortbed-toolbox-fender' && bedLength !== 'short') return false;
+        return true;
+      })
+    );
+  }, [bedLength]);
 
-  // Dynamic pricing calculation
-  const addOnsTotal =
-    (hasWorkLights ? 250 : 0) +
-    (hasToolboxes ? 550 : 0) +
-    (hasStakeSides ? 480 : 0) +
-    (hasLoadingRamps ? 650 : 0);
-  const estimatedMin = currentModel.basePriceMin + addOnsTotal;
-  const estimatedMax = currentModel.basePriceMax + addOnsTotal;
-  const formattedPriceRange = `$${estimatedMin.toLocaleString()} - $${estimatedMax.toLocaleString()}`;
+  // Clean up Standard-only add-ons when switching to Full Skirted Model
+  useEffect(() => {
+    if (bedStyle === 'full-skirted') {
+      setSelectedAddOns((prev) =>
+        prev.filter((id) => {
+          const opt = VISUAL_ADDONS.find((a) => a.id === id);
+          return !opt?.standardOnly;
+        })
+      );
+    }
+  }, [bedStyle]);
 
-  // Filter available builds matching current selection
-  const matchingAssets = BUILD_ASSETS.filter(a => {
-    if (viewAngle !== 'all' && a.angle !== viewAngle) return false;
+  // Clean up Cab/Chassis-only receiver option if not Cab/Chassis
+  useEffect(() => {
+    if (wheelConfig !== 'cab-chassis') {
+      setSelectedExtraInstalls((prev) => prev.filter((id) => id !== 'class-v-receiver'));
+    }
+  }, [wheelConfig]);
+
+  // Computed labels
+  const resolvedTruckName =
+    truckMakeModel === 'Other / Custom Model'
+      ? customMakeModel.trim() || 'Custom Pickup Truck'
+      : truckMakeModel;
+
+  const wheelConfigLabel =
+    wheelConfig === 'srw'
+      ? 'Single Rear Wheel (SRW)'
+      : wheelConfig === 'dually'
+      ? 'Dually (DRW)'
+      : 'Cab / Chassis';
+
+  const bedLengthLabel = bedLength === 'short' ? 'Short Bed' : 'Long Bed';
+  const bedStyleLabel =
+    bedStyle === 'standard' ? 'Standard Model (Non-Skirted)' : 'Full Skirted Model';
+  const deckTypeLabel =
+    deckType === 'wood' ? 'Wood Deck' : deckType === 'trex' ? 'Trex Deck' : 'Steel Deck';
+
+  // Filter add-ons visible for current flatbed style
+  const visibleVisualAddOns = VISUAL_ADDONS.filter((addon) => {
+    if (bedStyle === 'full-skirted' && addon.standardOnly) return false;
     return true;
   });
 
-  const currentAsset = BUILD_ASSETS.find(a => a.id === activeAssetId) || BUILD_ASSETS[0];
+  // Calculate exact price sheet math from Mark's 2 PDFs
+  const calculatePriceBreakdown = () => {
+    const baseSpec = BASE_PRICE_TABLE[bedStyle][deckType];
+    const isCabChassis = wheelConfig === 'cab-chassis';
+    const basePrice = isCabChassis ? null : wheelConfig === 'dually' ? baseSpec.dually : baseSpec.srw;
+    const installPrice = baseSpec.install;
 
-  // Model selection handler with deck finish auto-reset and asset sync
-  const handleModelSelect = (modelId: string) => {
-    setSelectedModelId(modelId);
-    const targetModel = FLATBED_MODELS.find(m => m.id === modelId);
-    if (targetModel && !targetModel.deckOptions.includes(selectedDeckFinish)) {
-      setSelectedDeckFinish(targetModel.deckOptions[0]);
+    // Tacoma deduction (-$275 on Standard Model per PDF Table 2)
+    const tacomaDeduction =
+      bedStyle === 'standard' && truckMakeModel === 'Toyota Tacoma' ? 275 : 0;
+
+    let addOnsTotal = 0;
+    const itemizedAddOns: { label: string; price: number }[] = [];
+
+    for (const id of selectedAddOns) {
+      const opt = VISUAL_ADDONS.find((a) => a.id === id);
+      if (opt) {
+        const price = opt.getPrice(bedLength, dRingCount);
+        const label =
+          id === 'inset-drings'
+            ? `Inset D-Rings (${dRingCount}x @ $25/ea.)`
+            : id === 'underbody-toolboxes'
+            ? `Underbody Toolboxes (${bedLength === 'long' ? 'Longbed Pair' : 'Shortbed Pair'})`
+            : opt.name;
+        addOnsTotal += price;
+        itemizedAddOns.push({ label, price });
+      }
     }
-    const match =
-      BUILD_ASSETS.find(a => a.bedType === modelId && (viewAngle === 'all' || a.angle === viewAngle)) ||
-      BUILD_ASSETS.find(a => a.bedType === modelId);
-    if (match) setActiveAssetId(match.id);
+
+    for (const id of selectedExtraInstalls) {
+      const extra = EXTRA_INSTALL_OPTIONS.find((e) => e.id === id);
+      if (extra) {
+        addOnsTotal += extra.price;
+        itemizedAddOns.push({ label: extra.name, price: extra.price });
+      }
+    }
+
+    const totalInstalled =
+      basePrice !== null ? basePrice + installPrice + addOnsTotal - tacomaDeduction : null;
+
+    return {
+      isCabChassis,
+      basePrice,
+      installPrice,
+      tacomaDeduction,
+      addOnsTotal,
+      itemizedAddOns,
+      totalInstalled
+    };
   };
 
-  // Bed length selection handler with Dually auto-selection
-  const handleBedLengthSelect = (bed: string) => {
-    setSelectedBedLength(bed);
-    if (bed.includes('Dually') || bed.includes('DRW')) {
-      setSelectedModelId('dually-hd-skirt');
-      setActiveAssetId('dually-wood-deck');
-    } else if (selectedModelId === 'dually-hd-skirt') {
-      setSelectedModelId('deluxe-skirted');
-      setActiveAssetId('denali-deluxe');
-    }
+  const priceBreakdown = calculatePriceBreakdown();
+
+  // Toggle visual add-on selection
+  const toggleAddOn = (addon: AddOnOption) => {
+    if (addon.bedRestriction === 'long-only' && bedLength !== 'long') return;
+    if (addon.bedRestriction === 'short-only' && bedLength !== 'short') return;
+
+    setSelectedAddOns((prev) =>
+      prev.includes(addon.id) ? prev.filter((id) => id !== addon.id) : [...prev, addon.id]
+    );
   };
 
-  // Make selection handler
-  const handleMakeSelect = (make: string) => {
-    setSelectedMake(make);
-    const makeAsset =
-      BUILD_ASSETS.find(a => a.make === make && (viewAngle === 'all' || a.angle === viewAngle)) ||
-      BUILD_ASSETS.find(a => a.make === make);
-    if (makeAsset) {
-      setActiveAssetId(makeAsset.id);
-      setSelectedModelId(makeAsset.bedType);
-    }
+  const toggleExtraInstall = (extra: ExtraInstallOption) => {
+    if (extra.cabChassisOnly && wheelConfig !== 'cab-chassis') return;
+    setSelectedExtraInstalls((prev) =>
+      prev.includes(extra.id) ? prev.filter((id) => id !== extra.id) : [...prev, extra.id]
+    );
   };
 
-  // Safe file upload handler with MIME validation, size cap, and canvas re-encoding
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Process uploaded image file (EXIF-stripping canvas re-encode)
+  const processImageFile = (file: File) => {
     setUploadError(null);
     setAiError(null);
     setAiGeneratedImage(null);
-    const file = e.target.files?.[0];
-    if (!file) return;
+    setIsQuoteFormOpen(false);
+    setQuoteSubmitted(false);
 
-    // 1. Enforce file size limit (10MB)
     if (file.size > 10 * 1024 * 1024) {
       setUploadError('Image size exceeds 10MB limit. Please upload a smaller photo.');
       if (fileInputRef.current) fileInputRef.current.value = '';
       return;
     }
 
-    // 2. Strict MIME allowlist (strictly no SVG or active XML)
     const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp'];
     if (!allowedMimeTypes.includes(file.type)) {
-      setUploadError('Unsupported format. Please upload a standard JPG, PNG, or WebP photo.');
+      setUploadError('Unsupported format. Please upload a JPG, PNG, or WebP photo.');
       if (fileInputRef.current) fileInputRef.current.value = '';
       return;
     }
@@ -403,26 +459,37 @@ export default function App() {
     };
     reader.onload = (event) => {
       const rawDataUrl = event.target?.result as string;
-      // Re-encode via offscreen canvas to sanitize EXIF and verify raster dimensions
       const img = new Image();
       img.onload = () => {
         try {
           const canvas = document.createElement('canvas');
-          canvas.width = img.naturalWidth;
-          canvas.height = img.naturalHeight;
+          const maxDim = 1600;
+          let targetW = img.naturalWidth;
+          let targetH = img.naturalHeight;
+          if (targetW > maxDim || targetH > maxDim) {
+            if (targetW > targetH) {
+              targetH = Math.round((targetH * maxDim) / targetW);
+              targetW = maxDim;
+            } else {
+              targetW = Math.round((targetW * maxDim) / targetH);
+              targetH = maxDim;
+            }
+          }
+          canvas.width = targetW;
+          canvas.height = targetH;
           const ctx = canvas.getContext('2d');
           if (ctx) {
-            ctx.drawImage(img, 0, 0);
+            ctx.drawImage(img, 0, 0, targetW, targetH);
             const sanitizedDataUrl = canvas.toDataURL('image/jpeg', 0.92);
             setUploadedImage(sanitizedDataUrl);
-            setActiveTab('upload');
+            setActiveSampleId(null);
           } else {
             setUploadedImage(rawDataUrl);
-            setActiveTab('upload');
+            setActiveSampleId(null);
           }
         } catch {
           setUploadedImage(rawDataUrl);
-          setActiveTab('upload');
+          setActiveSampleId(null);
         }
       };
       img.onerror = () => {
@@ -434,182 +501,245 @@ export default function App() {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  // Quick sample truck loader (Stock Ford F-250 pickup bed)
-  const handleUseSampleTruck = () => {
-    setUploadError(null);
-    setAiError(null);
-    setUploadedImage('./assets/stock_f250.jpg');
-    setAiGeneratedImage(null);
-    setShowComparisonView(false);
-    setShowStockBedInUpload(false);
-    setActiveTab('upload');
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) processImageFile(file);
   };
 
-  // Live Generative AI Flatbed Engine (Multi-Reference DDfab Locked Engine)
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    setIsDraggingOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) processImageFile(file);
+  };
+
+  // One-click sample truck loader
+  const handleSelectSampleTruck = (sample: SampleTruck) => {
+    setUploadError(null);
+    setAiError(null);
+    setActiveSampleId(sample.id);
+    setUploadedImage(sample.beforeImage);
+    setTruckYear(sample.year);
+    setTruckMakeModel(sample.makeModel);
+    setWheelConfig(sample.wheelConfig);
+    setBedLength(sample.bedLength);
+    setAiGeneratedImage(null);
+    setIsQuoteFormOpen(false);
+    setQuoteSubmitted(false);
+  };
+
+  // Fallback pre-rendered image lookup if offline or worker error on sample trucks
+  const getSampleFallbackImage = (): string | null => {
+    if (!uploadedImage) return null;
+    if (uploadedImage.includes('stock_f250')) {
+      if (bedStyle === 'full-skirted') return './assets/f250_lora_inpaint.jpg';
+      if (deckType === 'wood') return './assets/f250_heritage_wood.jpg';
+      return './assets/f250_standard_work.jpg';
+    }
+    if (uploadedImage.includes('stock_silverado_2500hd')) {
+      return './assets/after_silverado_heritage_wood.jpg';
+    }
+    if (uploadedImage.includes('stock_sierra_2500hd')) {
+      return './assets/after_sierra_standard_utility.jpg';
+    }
+    if (uploadedImage.includes('stock_ram_2500')) {
+      return './assets/after_ram_deluxe_skirted.jpg';
+    }
+    return null;
+  };
+
+  // Check if current sample selection matches an exact pre-verified instant studio render (zero add-ons & exact deck match)
+  const getExactPreRenderedSampleMatch = (): string | null => {
+    if (!uploadedImage || selectedAddOns.length > 0 || wheelConfig === 'dually') return null;
+    if (uploadedImage.includes('stock_f250')) {
+      if (bedStyle === 'standard' && deckType === 'wood') return './assets/f250_heritage_wood.jpg';
+      if (bedStyle === 'standard' && deckType === 'steel') return './assets/f250_standard_work.jpg';
+      if (bedStyle === 'full-skirted' && deckType === 'steel') return './assets/f250_lora_inpaint.jpg';
+    }
+    if (uploadedImage.includes('stock_silverado_2500hd') && bedStyle === 'standard' && deckType === 'wood') {
+      return './assets/after_silverado_heritage_wood.jpg';
+    }
+    if (uploadedImage.includes('stock_sierra_2500hd') && bedStyle === 'standard' && deckType === 'steel') {
+      return './assets/after_sierra_standard_utility.jpg';
+    }
+    if (uploadedImage.includes('stock_ram_2500') && bedStyle === 'full-skirted' && deckType === 'steel') {
+      return './assets/after_ram_deluxe_skirted.jpg';
+    }
+    return null;
+  };
+
+  // Step 3: Trigger AI Flatbed Generation
   const handleGenerateAiFlatbed = async () => {
     if (!uploadedImage) return;
     setAiError(null);
     setIsAiGenerating(true);
-    setShowComparisonView(false);
+    setPreviewViewMode('after');
+    setQuoteSubmitted(false);
 
-    if (uploadFitMode === 'ai-lora') {
-      setAiStepText('Locking to DDfab reference geometry & headache rack specs...');
-    } else {
-      setAiStepText('Locking customer cab, rims & tires while matching DDfab reference...');
+    // Smooth scroll to the live preview card on mobile/tablet
+    if (typeof window !== 'undefined' && window.innerWidth < 1024 && previewCardRef.current) {
+      requestAnimationFrame(() => {
+        const rect = previewCardRef.current?.getBoundingClientRect();
+        if (rect) {
+          window.scrollTo({ top: window.scrollY + rect.top - 20, behavior: 'smooth' });
+        }
+      });
     }
 
+    const addOnSummary =
+      selectedAddOns.length > 0
+        ? selectedAddOns
+            .map((id) => VISUAL_ADDONS.find((a) => a.id === id)?.name)
+            .filter(Boolean)
+            .slice(0, 2)
+            .join(', ')
+        : 'DD Fab headache rack & LED lighting';
+
+    setAiStepText(`Removing factory pickup bed on your ${truckYear} ${resolvedTruckName}...`);
+
     const timer1 = setTimeout(() => {
-      if (uploadFitMode === 'ai-lora') {
-        setAiStepText('Fitting DDfab angled oval LED apron & branded ddFab.co mud flaps...');
-      } else {
-        setAiStepText('Installing DDfab angled oval LEDs & branded ddFab.co mud flaps...');
-      }
-    }, 1800);
+      setAiStepText(`Installing ${bedStyleLabel} with ${deckTypeLabel}...`);
+    }, 1400);
 
     const timer2 = setTimeout(() => {
-      setAiStepText('Finalizing multi-reference DDfab composite...');
-    }, 3800);
+      setAiStepText(`Fitting ${addOnSummary}...`);
+    }, 2900);
 
     try {
-      // Instant path for sample trucks
-      if (uploadedImage.includes('stock_f250')) {
-        await new Promise((r) => setTimeout(r, 1500));
+      // Fast path when sample truck matches an exact pre-verified render combination
+      const exactSampleMatch = getExactPreRenderedSampleMatch();
+      if (exactSampleMatch) {
+        await new Promise((r) => setTimeout(r, 1400));
         clearTimeout(timer1);
         clearTimeout(timer2);
-        if (uploadFitMode === 'ai-lora') {
-          setAiGeneratedImage('./assets/f250_lora_inpaint.jpg');
-        } else if (overlayBedStyle === 'standard-work') {
-          setAiGeneratedImage('./assets/f250_standard_work.jpg');
-        } else if (overlayBedStyle === 'heritage-wood') {
-          setAiGeneratedImage('./assets/f250_heritage_wood.jpg');
-        } else {
-          setAiGeneratedImage('./assets/f250_concept_ai.jpg');
-        }
-        setShowStockBedInUpload(false);
+        setAiGeneratedImage(exactSampleMatch);
         return;
       }
 
-      if (uploadedImage.includes('stock_silverado_2500hd')) {
-        await new Promise((r) => setTimeout(r, 1500));
-        clearTimeout(timer1);
-        clearTimeout(timer2);
-        setAiGeneratedImage('./assets/after_silverado_heritage_wood.jpg');
-        setShowStockBedInUpload(false);
-        return;
-      }
-
-      if (uploadedImage.includes('stock_sierra_2500hd')) {
-        await new Promise((r) => setTimeout(r, 1500));
-        clearTimeout(timer1);
-        clearTimeout(timer2);
-        setAiGeneratedImage('./assets/after_sierra_standard_utility.jpg');
-        setShowStockBedInUpload(false);
-        return;
-      }
-
-      if (uploadedImage.includes('stock_ram_2500')) {
-        await new Promise((r) => setTimeout(r, 1500));
-        clearTimeout(timer1);
-        clearTimeout(timer2);
-        setAiGeneratedImage('./assets/after_ram_deluxe_skirted.jpg');
-        setShowStockBedInUpload(false);
-        return;
-      }
-
-      if (uploadedImage.includes('denali_hd')) {
-        await new Promise((r) => setTimeout(r, 2000));
-        clearTimeout(timer1);
-        clearTimeout(timer2);
-        setAiGeneratedImage('./assets/ai_sample_flatbed.jpg');
-        setShowStockBedInUpload(false);
-        return;
-      }
-
+      // Convert relative sample truck URL to base64 data URL so the Cloudflare Worker can always read it reliably (even on localhost)
       let imagePayload = uploadedImage;
-      if (uploadedImage.startsWith('./')) {
-        const fullUrl = new URL(uploadedImage.replace('./', ''), window.location.href).href;
-        imagePayload = fullUrl;
+      if (uploadedImage.startsWith('./') || uploadedImage.startsWith('/')) {
+        try {
+          const imgResp = await fetch(uploadedImage);
+          const blob = await imgResp.blob();
+          imagePayload = await new Promise<string>((resolve, reject) => {
+            const r = new FileReader();
+            r.onloadend = () => resolve(r.result as string);
+            r.onerror = reject;
+            r.readAsDataURL(blob);
+          });
+        } catch {
+          imagePayload = new URL(uploadedImage.replace('./', ''), window.location.href).href;
+        }
       }
+
+      const legacyModelId =
+        bedStyle === 'standard'
+          ? deckType === 'wood'
+            ? 'heritage-wood'
+            : 'standard-work'
+          : wheelConfig === 'dually'
+          ? 'dually-hd-skirt'
+          : 'deluxe-skirted';
 
       const response = await fetch('https://cfb-ai-generator.tek123168.workers.dev', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           image: imagePayload,
-          modelId: overlayBedStyle,
-          mode: uploadFitMode === 'ai-lora' ? 'inpaint-lora' : 'concept',
-        }),
+          modelId: legacyModelId,
+          truckYear,
+          truckMakeModel: resolvedTruckName,
+          wheelConfig,
+          bedLength,
+          bedStyle,
+          deckType,
+          addOns: selectedAddOns
+        })
       });
 
       clearTimeout(timer1);
       clearTimeout(timer2);
 
       if (!response.ok) {
-        if (uploadedImage.includes('f250')) {
-          setAiGeneratedImage(uploadFitMode === 'ai-lora' ? './assets/f250_lora_inpaint.jpg' : './assets/f250_concept_ai.jpg');
-          setShowStockBedInUpload(false);
+        const fallback = getSampleFallbackImage();
+        if (fallback) {
+          setAiGeneratedImage(fallback);
           return;
         }
-        if (uploadedImage.includes('denali_hd')) {
-          setAiGeneratedImage('./assets/ai_sample_flatbed.jpg');
-          setShowStockBedInUpload(false);
-          return;
-        }
-        throw new Error('AI generation server busy. Please try one of the demo trucks or retry.');
+        throw new Error('AI generator is currently busy. Please try again in a moment.');
       }
 
       const data = await response.json();
       if (data.imageUrl) {
         setAiGeneratedImage(data.imageUrl);
-        setShowStockBedInUpload(false);
       } else {
-        if (uploadedImage.includes('denali_hd')) {
-          setAiGeneratedImage('./assets/ai_sample_flatbed.jpg');
-          setShowStockBedInUpload(false);
+        const fallback = getSampleFallbackImage();
+        if (fallback) {
+          setAiGeneratedImage(fallback);
           return;
         }
-        throw new Error(data.error || 'No image returned from AI.');
+        throw new Error(data.error || 'No image returned from AI generator.');
       }
     } catch (err: any) {
       clearTimeout(timer1);
       clearTimeout(timer2);
-      if (uploadedImage.includes('f250')) {
-        setAiGeneratedImage(uploadFitMode === 'ai-lora' ? './assets/f250_lora_inpaint.jpg' : './assets/f250_concept_ai.jpg');
-        setShowStockBedInUpload(false);
-      } else if (uploadedImage.includes('denali_hd')) {
-        setAiGeneratedImage('./assets/ai_sample_flatbed.jpg');
-        setShowStockBedInUpload(false);
+      const fallback = getSampleFallbackImage();
+      if (fallback) {
+        setAiGeneratedImage(fallback);
       } else {
-        setAiError(err.message || 'AI generation server timed out. Please try one of the demo trucks or retry.');
+        setAiError(
+          err.message || 'Could not complete AI preview. Please try one of the sample trucks or retry.'
+        );
       }
     } finally {
       setIsAiGenerating(false);
     }
   };
 
-  // Quote submit with validation, reference ID locking, and local persistence
+  // Open & scroll to the Quote Request Card
+  const handleOpenQuoteRequest = () => {
+    setIsQuoteFormOpen(true);
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        if (quoteSectionRef.current) {
+          const rect = quoteSectionRef.current.getBoundingClientRect();
+          window.scrollTo({ top: window.scrollY + rect.top - 24, behavior: 'smooth' });
+        }
+      }, 60);
+    });
+  };
+
+  // Submit Quote Request
   const handleQuoteSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setValidationError(null);
 
-    // Validate whitespace-only inputs
     if (formData.name.trim().length < 2) {
-      setValidationError('Please provide your full name (at least 2 characters).');
+      setValidationError('Please enter your full name.');
       return;
     }
     if (formData.phone.trim().length < 7) {
-      setValidationError('Please provide a valid contact phone number.');
+      setValidationError('Please enter a valid phone number.');
       return;
     }
-    if (formData.cityZip.trim().length < 2) {
-      setValidationError('Please provide your city or zip code.');
+    if (!formData.email.trim().includes('@')) {
+      setValidationError('Please enter a valid email address.');
       return;
     }
 
     const refId = 'CFB-' + Date.now().toString().slice(-6);
     setSubmittedRefId(refId);
 
-    // Persist inquiry locally for Mark Richards
+    const selectedAddOnNames = [
+      ...selectedAddOns.map((id) => {
+        const opt = VISUAL_ADDONS.find((a) => a.id === id);
+        if (!opt) return null;
+        return id === 'inset-drings' ? `Inset D-Rings (${dRingCount}x)` : opt.name;
+      }),
+      ...selectedExtraInstalls.map((id) => EXTRA_INSTALL_OPTIONS.find((e) => e.id === id)?.name)
+    ].filter(Boolean) as string[];
+
     try {
       const inquiryPayload = {
         refId,
@@ -618,1479 +748,1244 @@ export default function App() {
           name: formData.name.trim(),
           phone: formData.phone.trim(),
           email: formData.email.trim(),
-          companyName: formData.companyName.trim(),
-          fleetSize: formData.fleetSize,
-          preferredContact: formData.preferredContact,
           cityZip: formData.cityZip.trim(),
-          truckYear: formData.truckYear.trim(),
-          timeline: formData.timeline,
           notes: formData.notes.trim()
         },
-        specs: {
-          make: selectedMake,
-          cab: selectedCab,
-          chassisType: chassisType === 'pickup-removal' ? 'Factory Pickup Bed Removal (Standard)' : 'Cab & Chassis (34" Flat Frame Rails)',
-          bedLength: selectedBedLength,
-          model: currentModel.name,
-          deckFinish: selectedDeckFinish,
-          headacheRack: selectedHeadacheRack,
-          accessories: selectedAccessories,
-          estimatedRange: formattedPriceRange,
-          isPhotoUpload: isPhotoQuote
+        truck: {
+          year: truckYear,
+          makeModel: resolvedTruckName,
+          wheelConfig: wheelConfigLabel,
+          bedLength: bedLengthLabel
+        },
+        flatbedOptions: {
+          bedStyle: bedStyleLabel,
+          deckType: deckTypeLabel,
+          addOns: selectedAddOnNames,
+          priceSheetBreakdown: {
+            basePrice: priceBreakdown.basePrice,
+            installPrice: priceBreakdown.installPrice,
+            addOnsTotal: priceBreakdown.addOnsTotal,
+            tacomaDeduction: priceBreakdown.tacomaDeduction,
+            totalInstalled: priceBreakdown.totalInstalled
+          }
         }
       };
-      const existingInquiries = JSON.parse(localStorage.getItem('cfb_quote_inquiries') || '[]');
-      localStorage.setItem('cfb_quote_inquiries', JSON.stringify([inquiryPayload, ...existingInquiries]));
+      const existing = JSON.parse(localStorage.getItem('cfb_quote_inquiries') || '[]');
+      localStorage.setItem('cfb_quote_inquiries', JSON.stringify([inquiryPayload, ...existing]));
     } catch {
-      // LocalStorage fallback handled silently
+      // Ignore storage quota errors
     }
 
     setQuoteSubmitted(true);
   };
 
-  const selectedAccessories = [
-    hasWorkLights ? 'LED Work Lights' : null,
-    hasToolboxes ? 'Underbody Toolboxes' : null,
-    hasStakeSides ? 'Stake Sides' : null,
-    hasLoadingRamps ? 'Slide-Out Ramps' : null
+  // All selected add-on pill labels
+  const allSelectedAddOnLabels = [
+    ...selectedAddOns.map((id) => {
+      const opt = VISUAL_ADDONS.find((a) => a.id === id);
+      if (!opt) return null;
+      return id === 'inset-drings' ? `Inset D-Rings (${dRingCount}x)` : opt.name;
+    }),
+    ...selectedExtraInstalls.map((id) => EXTRA_INSTALL_OPTIONS.find((e) => e.id === id)?.name)
   ].filter(Boolean) as string[];
 
   return (
-    <div className="min-h-screen bg-[#080808] text-gray-200 flex flex-col overflow-x-hidden w-full selection:bg-[#FC5716] selection:text-white">
-      {/* Top Header Bar */}
-      <header className="border-b border-[#222222] bg-[#0c0c0c]/90 backdrop-blur sticky top-0 z-40 w-full">
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-16 sm:h-18 flex items-center justify-between gap-2">
-          <div className="flex items-center space-x-2 sm:space-x-3 min-w-0">
-            <div className="w-8 h-8 sm:w-10 sm:h-10 shrink-0 rounded bg-[#FC5716] flex items-center justify-center font-heading font-bold text-black text-sm sm:text-xl tracking-wider shadow-lg shadow-[#FC5716]/20">
+    <div className="min-h-screen bg-[#090909] text-gray-100 flex flex-col overflow-x-hidden w-full selection:bg-[#FC5716] selection:text-white">
+      {/* Clean Brand Header */}
+      <header className="border-b border-[#222222] bg-[#0d0d0d]/95 backdrop-blur sticky top-0 z-40 w-full">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 shrink-0 rounded-lg bg-[#FC5716] flex items-center justify-center font-heading font-bold text-black text-base sm:text-xl tracking-wider shadow-md shadow-[#FC5716]/20">
               CF
             </div>
             <div className="min-w-0">
-              <div className="font-heading font-bold text-sm sm:text-xl text-white tracking-wide flex items-center gap-1 sm:gap-2 truncate">
-                CAROLINA FLATBEDS
-                <span className="text-[10px] sm:text-[11px] font-sans font-medium px-1.5 sm:px-2 py-0.5 rounded bg-[#FC5716]/10 text-[#FC5716] border border-[#FC5716]/30 uppercase tracking-widest hidden md:inline-block">
-                  AI Configurator
+              <div className="font-heading font-bold text-sm sm:text-lg text-white tracking-wide flex items-center gap-2 truncate">
+                <span>CAROLINA FLATBEDS</span>
+                <span className="text-[10px] font-sans font-semibold px-2 py-0.5 rounded bg-[#FC5716]/15 text-[#FC5716] border border-[#FC5716]/30 uppercase tracking-wider hidden sm:inline-block">
+                  AI Flatbed Visualizer
                 </span>
               </div>
-              <p className="text-[10px] sm:text-xs text-gray-400 font-medium truncate">Authorized DD Fab | Charleston, SC</p>
+              <p className="text-[11px] sm:text-xs text-gray-400 truncate">
+                Authorized DD Fab Upfitter | Charleston, SC
+              </p>
             </div>
           </div>
 
-          <div className="flex items-center space-x-1.5 sm:space-x-3 shrink-0">
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <button
-              onClick={() => setActiveTab('configurator')}
-              className={`px-2.5 sm:px-4 py-1.5 sm:py-2 rounded text-xs sm:text-sm font-semibold transition flex items-center gap-1 sm:gap-1.5 cursor-pointer ${
-                activeTab === 'configurator'
-                  ? 'bg-[#FC5716] text-black font-bold shadow-md shadow-[#FC5716]/30'
-                  : 'bg-[#181818] text-gray-300 hover:bg-[#252525]'
+              type="button"
+              onClick={() => setShowPrices((p) => !p)}
+              className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold border transition cursor-pointer flex items-center gap-1.5 ${
+                showPrices
+                  ? 'bg-[#FC5716]/15 border-[#FC5716] text-[#FC5716]'
+                  : 'bg-[#161616] border-[#2c2c2c] text-gray-300 hover:border-gray-500'
               }`}
             >
-              <Truck className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              <span>Studio</span>
+              <SlidersHorizontal className="w-3.5 h-3.5" />
+              <span>{showPrices ? 'Hide Price Sheet' : 'View Price Sheet Estimate'}</span>
             </button>
-            <button
-              onClick={() => setActiveTab('upload')}
-              className={`px-2.5 sm:px-4 py-1.5 sm:py-2 rounded text-xs sm:text-sm font-semibold transition flex items-center gap-1 sm:gap-1.5 cursor-pointer ${
-                activeTab === 'upload'
-                  ? 'bg-[#FC5716] text-black font-bold shadow-md shadow-[#FC5716]/30'
-                  : 'bg-[#181818] text-gray-300 hover:bg-[#252525]'
-              }`}
+
+            <a
+              href="tel:8436476437"
+              className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#161616] border border-[#2c2c2c] hover:border-[#FC5716]/50 text-xs font-semibold text-gray-200 transition"
             >
-              <Camera className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              <span>{uploadedImage ? 'My Truck' : 'AI Fitment'}</span>
-            </button>
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileUpload}
-              accept="image/jpeg,image/png,image/webp"
-              className="hidden"
-            />
+              <Phone className="w-3.5 h-3.5 text-[#FC5716]" />
+              <span>843-647-6437</span>
+            </a>
           </div>
         </div>
       </header>
 
-      {/* Upload Error Alert */}
-      {uploadError && (
-        <div className="bg-red-950/80 border-b border-red-700/50 px-4 py-2 text-center text-xs text-red-200">
-          {uploadError}
-        </div>
-      )}
-
-      {/* Main Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-5 pb-28 lg:pb-8">
-        {activeTab === 'configurator' ? (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
-            {/* Left Column: Visualizer Viewport (7 Cols) */}
-            <div className="lg:col-span-7 flex flex-col space-y-4">
-              {/* Main Canvas Card */}
-              <div
-                className={`relative rounded-xl overflow-hidden border transition-all duration-300 shadow-2xl group ${
-                  backgroundScene === 'lowcountry'
-                    ? 'border-[#2d2822] bg-[#121110] shadow-[#FC5716]/5'
-                    : backgroundScene === 'warehouse'
-                    ? 'border-[#222830] bg-[#0f1318] shadow-blue-900/10'
-                    : 'border-[#222222] bg-[#0d0d0d]'
-                }`}
-              >
-                {/* Viewport Header */}
-                <div className="absolute top-3 left-3 right-3 sm:top-4 sm:left-4 sm:right-4 z-20 flex items-center justify-between pointer-events-none gap-2">
-                  <div className="pointer-events-auto bg-[#080808]/90 backdrop-blur-md px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg border border-[#333333] text-[11px] sm:text-xs font-semibold text-white shadow truncate max-w-[60%] sm:max-w-none">
-                    <span className="text-[#FC5716] font-bold mr-1.5">LIVE RENDER:</span>
-                    <span className="truncate">{currentAsset.title.split(' - ')[0]}</span>
-                  </div>
-
-                  {/* Scene Selector */}
-                  <div className="pointer-events-auto flex items-center space-x-1 bg-[#080808]/90 backdrop-blur-md p-1 rounded-lg border border-[#333333] text-xs shrink-0">
-                    <button
-                      onClick={() => setBackgroundScene('lowcountry')}
-                      className={`px-2 py-0.5 sm:px-2.5 sm:py-1 rounded text-[10px] sm:text-[11px] font-medium transition cursor-pointer min-h-[30px] flex items-center ${
-                        backgroundScene === 'lowcountry' ? 'bg-[#FC5716] text-black font-bold' : 'text-gray-400 hover:text-white'
-                      }`}
-                      title="Natural outdoor lighting"
-                    >
-                      Lowcountry
-                    </button>
-                    <button
-                      onClick={() => setBackgroundScene('warehouse')}
-                      className={`px-2 py-0.5 sm:px-2.5 sm:py-1 rounded text-[10px] sm:text-[11px] font-medium transition cursor-pointer min-h-[30px] flex items-center ${
-                        backgroundScene === 'warehouse' ? 'bg-[#FC5716] text-black font-bold' : 'text-gray-400 hover:text-white'
-                      }`}
-                      title="Shop floor fluorescent contrast"
-                    >
-                      Shop Floor
-                    </button>
-                    <button
-                      onClick={() => setBackgroundScene('studio')}
-                      className={`px-2 py-0.5 sm:px-2.5 sm:py-1 rounded text-[10px] sm:text-[11px] font-medium transition cursor-pointer min-h-[30px] flex items-center ${
-                        backgroundScene === 'studio' ? 'bg-[#FC5716] text-black font-bold' : 'text-gray-400 hover:text-white'
-                      }`}
-                      title="Dark studio showcase"
-                    >
-                      Studio
-                    </button>
-                  </div>
-                </div>
-
-                {/* Viewport Image */}
-                <div className="relative aspect-[16/10] w-full overflow-hidden bg-gradient-to-b from-[#181818] to-[#0a0a0a] flex items-center justify-center">
-                  <img
-                    src={currentAsset.image}
-                    alt={currentAsset.title}
-                    className="w-full h-full object-cover transition-all duration-500 group-hover:scale-[1.01]"
-                  />
-
-                  {/* Interactive Visual Feature Hotspots */}
-                  {showHotspots && currentAsset.angle === 'Three-Quarter Rear' && VISUAL_HOTSPOTS.map((spot) => {
-                    const isSelected = activeHotspotId === spot.id;
-                    const isHitch = spot.id === 'hitch';
-                    return (
-                      <div
-                        key={spot.id}
-                        style={{ top: spot.top, left: spot.left }}
-                        className="absolute -translate-x-1/2 -translate-y-1/2 z-20 group/spot"
-                      >
-                        <button
-                          type="button"
-                          onClick={() => setActiveHotspotId(isSelected ? null : spot.id)}
-                          className={`w-7 h-7 sm:w-6 sm:h-6 rounded-full flex items-center justify-center transition-all cursor-pointer shadow-lg ${
-                            isSelected
-                              ? 'bg-[#FC5716] text-black scale-110 ring-4 ring-[#FC5716]/30'
-                              : 'bg-black/75 hover:bg-[#FC5716] text-[#FC5716] hover:text-black border-2 border-[#FC5716]'
-                          }`}
-                          title={spot.title}
-                        >
-                          <span className="w-2.5 h-2.5 rounded-full bg-current" />
-                        </button>
-
-                        {/* Tooltip Card */}
-                        <div
-                          className={`absolute bottom-full mb-2 w-56 p-2.5 rounded-lg bg-[#0e0e0e]/95 border border-[#333] shadow-2xl backdrop-blur-md pointer-events-auto transition-all duration-200 z-30 ${
-                            isHitch ? 'left-0 translate-x-0' : 'left-1/2 -translate-x-1/2'
-                          } ${
-                            isSelected
-                              ? 'opacity-100 scale-100 visible'
-                              : 'opacity-0 scale-95 invisible group-hover/spot:opacity-100 group-hover/spot:scale-100 group-hover/spot:visible'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between border-b border-[#222] pb-1 mb-1">
-                            <span className="text-[11px] font-heading font-bold text-[#FC5716] uppercase">{spot.title}</span>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setActiveHotspotId(null);
-                              }}
-                              className="text-[10px] text-gray-400 hover:text-white"
-                            >
-                              &times;
-                            </button>
-                          </div>
-                          <p className="text-[10px] text-gray-300 leading-tight">{spot.desc}</p>
-                        </div>
-                      </div>
-                    );
-                  })}
-
-                  {/* Dynamic Scene Lighting Vignette */}
-                  {backgroundScene === 'lowcountry' && (
-                    <div className="absolute inset-0 bg-gradient-to-tr from-amber-950/20 via-transparent to-transparent pointer-events-none" />
-                  )}
-                  {backgroundScene === 'warehouse' && (
-                    <div className="absolute inset-0 bg-gradient-to-b from-sky-950/20 via-transparent to-transparent pointer-events-none" />
-                  )}
-                  {backgroundScene === 'studio' && (
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/30 pointer-events-none" />
-                  )}
-
-                  {/* Dark gradient overlay at bottom for callouts */}
-                  <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-[#080808]/90 via-[#080808]/40 to-transparent pointer-events-none" />
-
-                  {/* Feature Hotspots Overlay */}
-                  <div className="absolute bottom-2.5 sm:bottom-3 left-3 sm:left-4 right-3 sm:right-4 flex flex-wrap gap-1.5 sm:gap-2 z-10">
-                    {currentAsset.options.map((opt, i) => (
-                      <span
-                        key={i}
-                        className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-semibold bg-[#111111]/90 text-gray-200 border border-[#333333] px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md shadow"
-                      >
-                        <ShieldCheck className="w-3 h-3 text-[#FC5716]" />
-                        {opt}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Viewport Footer Bar */}
-                <div className="bg-[#121212] px-3 sm:px-4 py-2.5 sm:py-3 border-t border-[#222222] flex flex-wrap items-center justify-between text-xs text-gray-400 gap-2">
-                  <div className="flex items-center space-x-1.5 sm:space-x-2">
-                    <span className="font-semibold text-gray-300">Angle:</span>
-                    <button
-                      onClick={() => setViewAngle('all')}
-                      className={`px-2 py-0.5 rounded cursor-pointer ${
-                        viewAngle === 'all' ? 'bg-[#2a2a2a] text-white font-bold' : 'hover:text-white'
-                      }`}
-                    >
-                      All ({BUILD_ASSETS.length})
-                    </button>
-                    <button
-                      onClick={() => setViewAngle('Three-Quarter Rear')}
-                      className={`px-2 py-0.5 rounded cursor-pointer ${
-                        viewAngle === 'Three-Quarter Rear' ? 'bg-[#2a2a2a] text-white font-bold' : 'hover:text-white'
-                      }`}
-                    >
-                      3/4 Rear
-                    </button>
-                    <button
-                      onClick={() => setViewAngle('Direct Rear')}
-                      className={`px-2 py-0.5 rounded cursor-pointer ${
-                        viewAngle === 'Direct Rear' ? 'bg-[#2a2a2a] text-white font-bold' : 'hover:text-white'
-                      }`}
-                    >
-                      Direct Deck
-                    </button>
-                  </div>
-
-                  <div className="flex items-center space-x-2">
-                    <button
-                      type="button"
-                      onClick={() => setShowHotspots(!showHotspots)}
-                      className={`px-2 py-0.5 rounded text-[11px] font-medium transition cursor-pointer flex items-center gap-1 ${
-                        showHotspots ? 'bg-[#252525] text-[#FC5716]' : 'text-gray-500 hover:text-gray-300'
-                      }`}
-                    >
-                      <Sparkles className="w-3 h-3" />
-                      <span>{showHotspots ? 'Pins: On' : 'Pins: Off'}</span>
-                    </button>
-                    <span className="text-[11px] text-gray-500 hidden sm:inline">Fabricated by DD Fab</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Matching Real Builds Gallery Strip */}
-              <div className="bg-[#121212] rounded-xl p-3 sm:p-4 border border-[#222222] space-y-2.5 sm:space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-heading font-bold text-xs sm:text-sm tracking-wide text-white flex items-center gap-1.5 sm:gap-2">
-                    <Layers className="w-4 h-4 text-[#FC5716]" />
-                    VERIFIED DD FAB PROJECTS ({matchingAssets.length})
-                  </h3>
-                  <span className="text-[10px] sm:text-[11px] text-gray-400">Click photo to inspect</span>
-                </div>
-
-                <div className="grid grid-cols-5 gap-2 max-h-48 overflow-y-auto pr-1">
-                  {matchingAssets.map((asset) => (
-                    <button
-                      key={asset.id}
-                      onClick={() => {
-                        setActiveAssetId(asset.id);
-                        setSelectedModelId(asset.bedType);
-                      }}
-                      className={`group relative rounded-lg overflow-hidden border aspect-video transition cursor-pointer ${
-                        activeAssetId === asset.id
-                          ? 'border-[#FC5716] ring-2 ring-[#FC5716]/40 scale-[1.02]'
-                          : 'border-[#222222] opacity-75 hover:opacity-100 hover:border-gray-500'
-                      }`}
-                    >
-                      <img src={asset.image} alt={asset.title} className="w-full h-full object-cover" />
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
-                        <Eye className="w-3.5 h-3.5 text-white" />
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Right Column: Customizer Options & Specs (5 Cols) */}
-            <div className="lg:col-span-5 space-y-4 sm:space-y-5">
-              {/* Step 1: Vehicle Platform */}
-              <div className="bg-[#121212] rounded-xl p-4 sm:p-5 border border-[#222222] space-y-3.5">
-                <div className="flex items-center justify-between border-b border-[#222222] pb-2.5">
-                  <h2 className="font-heading font-bold text-base sm:text-lg text-white flex items-center gap-2">
-                    <span className="w-6 h-6 rounded-full bg-[#FC5716] text-black font-bold text-xs flex items-center justify-center">1</span>
-                    SELECT TRUCK PLATFORM
-                  </h2>
-                  <span className="text-xs text-[#FC5716] font-semibold">{selectedMake} {selectedCab}</span>
-                </div>
-
-                {/* Make Pills */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {['GMC', 'Chevrolet', 'Ford', 'Ram'].map((make) => (
-                    <button
-                      key={make}
-                      onClick={() => handleMakeSelect(make)}
-                      className={`py-2 px-3 rounded-lg text-xs font-bold transition text-center border cursor-pointer ${
-                        selectedMake === make
-                          ? 'bg-[#FC5716] text-black font-bold border-[#FC5716] shadow'
-                          : 'bg-[#181818] border-[#252525] text-gray-400 hover:border-gray-600 hover:text-white'
-                      }`}
-                    >
-                      {make}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Platform Badge Display */}
-                <div className="bg-[#181818] px-3 py-1.5 rounded-lg border border-[#252525] text-xs flex items-center justify-between text-gray-300">
-                  <span className="font-semibold">{currentPlatform.model}</span>
-                  <span className="text-[11px] text-[#FC5716] font-medium">{currentPlatform.badge}</span>
-                </div>
-
-                {/* Chassis Mounting Type */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-gray-300">Chassis Mounting Type:</label>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setChassisType('pickup-removal')}
-                      className={`py-1.5 px-2.5 rounded-md text-xs font-medium border text-left transition cursor-pointer ${
-                        chassisType === 'pickup-removal'
-                          ? 'bg-[#2a2a2a] border-[#FC5716] text-white font-bold'
-                          : 'bg-[#161616] border-[#222222] text-gray-400 hover:text-white'
-                      }`}
-                    >
-                      <span className="block font-bold">Factory Pickup Bed Removal</span>
-                      <span className="text-[10px] text-gray-400">Standard OEM truck bed unbolt & flatbed mount</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setChassisType('cab-chassis')}
-                      className={`py-1.5 px-2.5 rounded-md text-xs font-medium border text-left transition cursor-pointer ${
-                        chassisType === 'cab-chassis'
-                          ? 'bg-[#2a2a2a] border-[#FC5716] text-white font-bold'
-                          : 'bg-[#161616] border-[#222222] text-gray-400 hover:text-white'
-                      }`}
-                    >
-                      <span className="block font-bold">Cab & Chassis (Commercial)</span>
-                      <span className="text-[10px] text-gray-400">34" flat frame rails from factory</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Cab Style */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-gray-300">Cab Configuration:</label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {['Crew Cab', 'Extended/Super', 'Regular Cab'].map((cab) => (
-                      <button
-                        key={cab}
-                        onClick={() => setSelectedCab(cab)}
-                        className={`py-1.5 px-2 rounded-md text-xs font-medium border text-center transition cursor-pointer ${
-                          selectedCab === cab
-                            ? 'bg-[#2a2a2a] border-gray-400 text-white font-bold'
-                            : 'bg-[#161616] border-[#222222] text-gray-400 hover:text-white'
-                        }`}
-                      >
-                        {cab}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Bed Length / Axle */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-gray-300">Wheelbase & Cab-to-Axle (CA):</label>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    {[
-                      { id: '56" CA - Short Bed (6.5 ft)', label: '56" CA (Short Bed 6.5 ft)' },
-                      { id: '60" CA - Long Bed (8.0 ft)', label: '60" CA (Long Bed 8.0 ft)' },
-                      { id: '60" / 84" CA - DRW Dually', label: '60"/84" CA (DRW Dually)' }
-                    ].map((bed) => (
-                      <button
-                        key={bed.id}
-                        onClick={() => handleBedLengthSelect(bed.id)}
-                        className={`py-2 px-2 rounded-md text-xs font-medium border text-center transition cursor-pointer ${
-                          selectedBedLength === bed.id
-                            ? 'bg-[#2a2a2a] border-gray-400 text-white font-bold'
-                            : 'bg-[#161616] border-[#222222] text-gray-400 hover:text-white'
-                        }`}
-                      >
-                        {bed.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Step 2: Flatbed Model */}
-              <div className="bg-[#121212] rounded-xl p-4 sm:p-5 border border-[#222222] space-y-3.5">
-                <div className="flex items-center justify-between border-b border-[#222222] pb-2.5">
-                  <h2 className="font-heading font-bold text-base sm:text-lg text-white flex items-center gap-2">
-                    <span className="w-6 h-6 rounded-full bg-[#FC5716] text-black font-bold text-xs flex items-center justify-center">2</span>
-                    CHOOSE DD FAB BED MODEL
-                  </h2>
-                </div>
-
-                <div className="grid grid-cols-1 gap-2.5">
-                  {FLATBED_MODELS.map((model) => (
-                    <button
-                      key={model.id}
-                      onClick={() => handleModelSelect(model.id)}
-                      className={`text-left p-3.5 rounded-lg border transition space-y-1 relative cursor-pointer ${
-                        selectedModelId === model.id
-                          ? 'bg-[#FC5716]/10 border-[#FC5716] ring-1 ring-[#FC5716]'
-                          : 'bg-[#161616] border-[#222222] hover:border-gray-600'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="font-heading font-bold text-sm sm:text-base text-white">{model.name}</div>
-                        <div className="text-xs font-semibold text-[#FC5716] bg-[#FC5716]/10 px-2 py-0.5 rounded border border-[#FC5716]/20">
-                          ${model.basePriceMin.toLocaleString()} - ${model.basePriceMax.toLocaleString()}
-                        </div>
-                      </div>
-                      <p className="text-xs text-gray-400 line-clamp-1">{model.tagline}</p>
-                    </button>
-                  ))}
-                </div>
-
-                {/* Selected Model Specs Highlights */}
-                <div className="bg-[#161616] p-3 rounded-lg border border-[#262626] text-xs space-y-2">
-                  <div className="text-gray-300 leading-relaxed">{currentModel.description}</div>
-                  <div className="text-[#FC5716] font-medium text-[11px]">
-                    <span className="font-bold uppercase tracking-wider text-gray-400">Best for: </span>
-                    {currentModel.recommendedFor}
-                  </div>
-                  <div className="flex flex-wrap gap-1.5 pt-1">
-                    {currentModel.features.map((feat, idx) => (
-                      <span key={idx} className="bg-[#202020] text-gray-300 px-2 py-0.5 rounded text-[11px] border border-[#333] flex items-center gap-1">
-                        <Check className="w-3 h-3 text-[#FC5716]" />
-                        {feat}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Step 3: Deck Surface & Options */}
-              <div className="bg-[#121212] rounded-xl p-4 sm:p-5 border border-[#222222] space-y-3.5">
-                <div className="flex items-center justify-between border-b border-[#222222] pb-2.5">
-                  <h2 className="font-heading font-bold text-base sm:text-lg text-white flex items-center gap-2">
-                    <span className="w-6 h-6 rounded-full bg-[#FC5716] text-black font-bold text-xs flex items-center justify-center">3</span>
-                    OPTIONS & ACCESSORIES
-                  </h2>
-                </div>
-
-                {/* Deck Finish */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-gray-300">Deck Surface:</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {currentModel.deckOptions.map((deck) => (
-                      <button
-                        key={deck}
-                        onClick={() => setSelectedDeckFinish(deck)}
-                        className={`p-2 rounded text-xs text-left border transition cursor-pointer ${
-                          selectedDeckFinish === deck
-                            ? 'bg-[#2a2a2a] border-[#FC5716] text-white font-bold'
-                            : 'bg-[#161616] border-[#222222] text-gray-400 hover:text-white'
-                        }`}
-                      >
-                        {deck}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Headache Rack Selection */}
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-gray-300">Headache Rack Style:</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {['Louvered Cab Protector', 'Solid Steel Mesh', 'Open Window Bar'].map((rack) => (
-                      <button
-                        key={rack}
-                        onClick={() => setSelectedHeadacheRack(rack)}
-                        className={`p-2 rounded text-xs text-left border transition cursor-pointer ${
-                          selectedHeadacheRack === rack
-                            ? 'bg-[#2a2a2a] border-[#FC5716] text-white font-bold'
-                            : 'bg-[#161616] border-[#222222] text-gray-400 hover:text-white'
-                        }`}
-                      >
-                        {rack}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Checkbox Options */}
-                <div className="space-y-2 pt-1">
-                  <label className="flex items-center justify-between p-2.5 rounded-lg bg-[#161616] border border-[#222222] cursor-pointer hover:border-gray-600">
-                    <div className="flex items-center space-x-2.5">
-                      <input
-                        type="checkbox"
-                        checked={hasWorkLights}
-                        onChange={(e) => setHasWorkLights(e.target.checked)}
-                        className="rounded border-gray-600 text-[#FC5716] focus:ring-[#FC5716] bg-[#222]"
-                      />
-                      <span className="text-xs font-medium text-gray-200">High-Output LED Work Lights</span>
-                    </div>
-                    <span className="text-xs text-gray-400 font-semibold">+$250</span>
-                  </label>
-
-                  <label className="flex items-start justify-between p-2.5 rounded-lg bg-[#161616] border border-[#222222] cursor-pointer hover:border-gray-600 gap-2">
-                    <div className="flex items-start space-x-2.5">
-                      <input
-                        type="checkbox"
-                        checked={hasToolboxes}
-                        onChange={(e) => setHasToolboxes(e.target.checked)}
-                        className="mt-0.5 rounded border-gray-600 text-[#FC5716] focus:ring-[#FC5716] bg-[#222]"
-                      />
-                      <div>
-                        <span className="text-xs font-medium text-gray-200 block">Dual Rear Behind-Axle Toolboxes</span>
-                        <span className="text-[10px] text-gray-400 block">Adds 2 secondary lockable boxes behind rear axle; front boxes included standard on Deluxe Skirted</span>
-                      </div>
-                    </div>
-                    <span className="text-xs text-gray-400 font-semibold shrink-0">+$550</span>
-                  </label>
-
-                  <label className="flex items-center justify-between p-2.5 rounded-lg bg-[#161616] border border-[#222222] cursor-pointer hover:border-gray-600">
-                    <div className="flex items-center space-x-2.5">
-                      <input
-                        type="checkbox"
-                        checked={hasStakeSides}
-                        onChange={(e) => setHasStakeSides(e.target.checked)}
-                        className="rounded border-gray-600 text-[#FC5716] focus:ring-[#FC5716] bg-[#222]"
-                      />
-                      <span className="text-xs font-medium text-gray-200">Fold-Down Stake Bed Side Gates</span>
-                    </div>
-                    <span className="text-xs text-gray-400 font-semibold">+$480</span>
-                  </label>
-
-                  <label className="flex items-center justify-between p-2.5 rounded-lg bg-[#161616] border border-[#222222] cursor-pointer hover:border-gray-600">
-                    <div className="flex items-center space-x-2.5">
-                      <input
-                        type="checkbox"
-                        checked={hasLoadingRamps}
-                        onChange={(e) => setHasLoadingRamps(e.target.checked)}
-                        className="rounded border-gray-600 text-[#FC5716] focus:ring-[#FC5716] bg-[#222]"
-                      />
-                      <span className="text-xs font-medium text-gray-200">Underbed Slide-Out Aluminum Ramps</span>
-                    </div>
-                    <span className="text-xs text-gray-400 font-semibold">+$650</span>
-                  </label>
-                </div>
-              </div>
-
-              {/* Quote CTA Button with Real Dynamic Price Calculation */}
-              <div className="bg-gradient-to-r from-[#181818] to-[#121212] p-4 sm:p-5 rounded-xl border border-[#333333] shadow-lg space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-[11px] sm:text-xs text-gray-400 uppercase tracking-wider font-semibold">
-                      Estimated Build Range
-                    </div>
-                    <div className="font-heading font-bold text-xl sm:text-2xl text-white">
-                      {formattedPriceRange}
-                    </div>
-                    {addOnsTotal > 0 && (
-                      <div className="text-[11px] text-[#FC5716] font-medium">
-                        Includes +${addOnsTotal.toLocaleString()} selected options
-                      </div>
-                    )}
-                    <div className="text-[10px] text-gray-400 mt-0.5">
-                      Commercial financing from ~${Math.round(estimatedMin / 36)}/month (est. 36-mo WAC)
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-xs text-[#FC5716] font-bold">2-3 WEEKS</div>
-                    <div className="text-[11px] text-gray-400">Charleston Shop Build</div>
-                  </div>
-                </div>
-
-                {/* Professional Upfit & Commercial Inclusions */}
-                <div className="bg-[#121212] p-2.5 sm:p-3 rounded-lg border border-[#262626] text-[11px] space-y-1.5 text-gray-300">
-                  <div className="text-[10px] font-heading font-bold text-[#FC5716] uppercase tracking-wider">
-                    Turnkey Upfit Inclusions
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[10px] sm:text-[11px]">
-                    <div className="flex items-center gap-1.5">
-                      <Check className="w-3 h-3 text-[#FC5716] shrink-0" />
-                      <span>OEM Camera & Sensor Relocation</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <Check className="w-3 h-3 text-[#FC5716] shrink-0" />
-                      <span>Dual 7-Way RV Blade Harness</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <Check className="w-3 h-3 text-[#FC5716] shrink-0" />
-                      <span>Factory Bed Removal & HD Mount</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <Check className="w-3 h-3 text-[#FC5716] shrink-0" />
-                      <span>Section 179 Deduction Eligible</span>
-                    </div>
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => {
-                    setIsPhotoQuote(false);
-                    setIsQuoteModalOpen(true);
-                  }}
-                  className="w-full py-3 sm:py-3.5 px-4 rounded-lg bg-[#FC5716] hover:bg-[#ff692a] text-black font-heading font-bold text-sm sm:text-base tracking-wider transition shadow-lg shadow-[#FC5716]/30 flex items-center justify-center gap-2 group cursor-pointer"
-                >
-                  <span>REQUEST EXACT QUOTE FOR THIS BUILD</span>
-                  <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition" />
-                </button>
-                <p className="text-[11px] text-gray-400 text-center">
-                  Includes professional installation at Carolina Flatbeds in Charleston, SC.
-                </p>
-              </div>
-            </div>
+      {/* Main Content */}
+      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-5 sm:py-7">
+        {/* Intro Banner: Simple 3-Step Flow */}
+        <div className="mb-6 bg-gradient-to-r from-[#141210] via-[#171412] to-[#121212] border border-[#2a241f] rounded-xl p-4 sm:p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <h1 className="font-heading text-lg sm:text-2xl font-bold text-white tracking-wide">
+              SEE YOUR TRUCK WITH A DD FAB FLATBED IN 3 SIMPLE STEPS
+            </h1>
+            <p className="text-xs sm:text-sm text-gray-300 mt-1">
+              Submit your truck model, year, and photo, pick your flatbed style, deck, and add-ons, then let the AI render your truck and request a quote.
+            </p>
           </div>
-        ) : (
-          /* Upload Your Own Pickup Mode */
-          <div className="max-w-4xl mx-auto space-y-5">
-            <div className="bg-[#121212] rounded-xl p-4 sm:p-6 border border-[#222222] space-y-4">
-              <div className="flex items-center justify-between border-b border-[#222222] pb-3 gap-2 flex-wrap">
+          <div className="flex flex-wrap items-center gap-2 text-[11px] sm:text-xs font-semibold shrink-0">
+            <span className="px-2.5 py-1 rounded-full bg-[#FC5716]/20 text-[#FC5716] border border-[#FC5716]/40">
+              1. Your Truck & Photo
+            </span>
+            <span className="text-gray-600">-&gt;</span>
+            <span className="px-2.5 py-1 rounded-full bg-[#1e1e1e] text-gray-200 border border-[#333333]">
+              2. Pick Options
+            </span>
+            <span className="text-gray-600">-&gt;</span>
+            <span className="px-2.5 py-1 rounded-full bg-[#1e1e1e] text-gray-200 border border-[#333333]">
+              3. AI Render & Quote
+            </span>
+          </div>
+        </div>
+
+        {/* Two-Column Layout: Left = Step 1 & Step 2 Options | Right = Step 3 Sticky AI Preview & Quote */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
+          {/* LEFT COLUMN (7 Cols on Desktop): STEP 1 & STEP 2 */}
+          <div className="lg:col-span-7 flex flex-col space-y-6">
+            {/* ========================================================= */}
+            {/* STEP 1: YOUR TRUCK & PHOTO                                */}
+            {/* ========================================================= */}
+            <section className="bg-[#121212] border border-[#262626] rounded-xl p-4 sm:p-6 shadow-xl">
+              <div className="flex items-center justify-between gap-2 pb-4 mb-4 border-b border-[#222222]">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-7 h-7 rounded-full bg-[#FC5716] text-black font-heading font-bold text-sm flex items-center justify-center shrink-0">
+                    1
+                  </span>
+                  <div>
+                    <h2 className="font-heading text-base sm:text-lg font-bold text-white tracking-wide uppercase">
+                      Step 1: Your Truck & Photo
+                    </h2>
+                    <p className="text-xs text-gray-400">
+                      Select your pickup model, year, and upload a photo (or try a sample truck)
+                    </p>
+                  </div>
+                </div>
+                <Truck className="w-5 h-5 text-[#FC5716] shrink-0 hidden sm:block" />
+              </div>
+
+              {/* Truck Make/Model & Year Dropdowns */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 mb-4">
+                <div className="sm:col-span-2">
+                  <label
+                    htmlFor="truck-make-model"
+                    className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5"
+                  >
+                    Truck Make & Model
+                  </label>
+                  <select
+                    id="truck-make-model"
+                    value={truckMakeModel}
+                    onChange={(e) => setTruckMakeModel(e.target.value)}
+                    className="w-full bg-[#1a1a1a] border border-[#333333] focus:border-[#FC5716] rounded-lg px-3.5 py-2.5 text-sm text-white font-medium outline-none transition"
+                  >
+                    {TRUCK_MAKE_MODELS.map((item) => (
+                      <option key={item} value={item}>
+                        {item}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
                 <div>
-                  <h2 className="font-heading font-bold text-lg sm:text-2xl text-white flex items-center gap-2">
-                    <Sparkles className="w-5 h-5 text-[#FC5716]" />
-                    AI TRUCK FLATBED GENERATOR & FITMENT
-                  </h2>
-                  <p className="text-xs text-gray-400">
-                    Test the AI generator on stock trucks or upload your own pickup to test DD Fab flatbed fitment.
-                  </p>
-                </div>
-                <div className="flex items-center space-x-2 shrink-0">
-                  {uploadedImage && (
-                    <button
-                      type="button"
-                      onClick={() => setShowStockBedInUpload(!showStockBedInUpload)}
-                      className={`px-3 py-1.5 sm:py-2 rounded text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 ${
-                        showStockBedInUpload
-                          ? 'bg-amber-500 text-black font-bold shadow'
-                          : 'bg-[#252525] text-gray-200 hover:bg-[#333]'
-                      }`}
-                    >
-                      <Eye className="w-3.5 h-3.5" />
-                      <span>{showStockBedInUpload ? (aiGeneratedImage ? 'Show AI Flatbed' : 'Show DD Fab Overlay') : 'Compare Original Bed'}</span>
-                    </button>
-                  )}
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    className="px-3 py-1.5 sm:py-2 bg-[#FC5716] hover:bg-[#ff692a] text-black font-bold rounded text-xs transition cursor-pointer"
+                  <label
+                    htmlFor="truck-year"
+                    className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5"
                   >
-                    Upload My Truck
-                  </button>
+                    Truck Year
+                  </label>
+                  <select
+                    id="truck-year"
+                    value={truckYear}
+                    onChange={(e) => setTruckYear(e.target.value)}
+                    className="w-full bg-[#1a1a1a] border border-[#333333] focus:border-[#FC5716] rounded-lg px-3.5 py-2.5 text-sm text-white font-medium outline-none transition"
+                  >
+                    {TRUCK_YEARS.map((yr) => (
+                      <option key={yr} value={yr}>
+                        {yr}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
-              {/* Quick Preset Selector for Easy Testing */}
-              <div className="bg-[#171717] p-2.5 rounded-lg border border-[#282828] flex items-center justify-between flex-wrap gap-2 text-xs">
-                <span className="font-semibold text-gray-300">Quick Test Stock Trucks:</span>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setUploadedImage('./assets/stock_f250.jpg');
-                      setOverlayBedStyle('deluxe-skirted');
-                      setAiGeneratedImage(null);
-                      setShowComparisonView(false);
-                      setShowStockBedInUpload(false);
-                    }}
-                    className={`px-2.5 py-1 rounded transition cursor-pointer border ${
-                      uploadedImage?.includes('stock_f250')
-                        ? 'bg-[#FC5716]/20 border-[#FC5716] text-[#FC5716] font-bold'
-                        : 'bg-[#222] border-[#333] text-gray-300 hover:text-white'
-                    }`}
+              {truckMakeModel === 'Other / Custom Model' && (
+                <div className="mb-4">
+                  <label
+                    htmlFor="custom-truck-input"
+                    className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5"
                   >
-                    1. Ford F-250 (White)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setUploadedImage('./assets/stock_silverado_2500hd.jpg');
-                      setOverlayBedStyle('heritage-wood');
-                      setAiGeneratedImage(null);
-                      setShowComparisonView(false);
-                      setShowStockBedInUpload(false);
-                    }}
-                    className={`px-2.5 py-1 rounded transition cursor-pointer border ${
-                      uploadedImage?.includes('stock_silverado_2500hd')
-                        ? 'bg-[#FC5716]/20 border-[#FC5716] text-[#FC5716] font-bold'
-                        : 'bg-[#222] border-[#333] text-gray-300 hover:text-white'
-                    }`}
-                  >
-                    2. Chevy Silverado 2500HD (Gray)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setUploadedImage('./assets/stock_sierra_2500hd.jpg');
-                      setOverlayBedStyle('standard-work');
-                      setAiGeneratedImage(null);
-                      setShowComparisonView(false);
-                      setShowStockBedInUpload(false);
-                    }}
-                    className={`px-2.5 py-1 rounded transition cursor-pointer border ${
-                      uploadedImage?.includes('stock_sierra_2500hd')
-                        ? 'bg-[#FC5716]/20 border-[#FC5716] text-[#FC5716] font-bold'
-                        : 'bg-[#222] border-[#333] text-gray-300 hover:text-white'
-                    }`}
-                  >
-                    3. GMC Sierra 2500HD Denali (Black)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setUploadedImage('./assets/stock_ram_2500.jpg');
-                      setOverlayBedStyle('deluxe-skirted');
-                      setAiGeneratedImage(null);
-                      setShowComparisonView(false);
-                      setShowStockBedInUpload(false);
-                    }}
-                    className={`px-2.5 py-1 rounded transition cursor-pointer border ${
-                      uploadedImage?.includes('stock_ram_2500')
-                        ? 'bg-[#FC5716]/20 border-[#FC5716] text-[#FC5716] font-bold'
-                        : 'bg-[#222] border-[#333] text-gray-300 hover:text-white'
-                    }`}
-                  >
-                    4. Dodge Ram 2500 (Camper Shell)
-                  </button>
-                </div>
-              </div>
-
-              {uploadedImage ? (
-                <div className="space-y-4">
-                  {/* Viewport Image */}
-                  <div className="relative aspect-[16/10] w-full bg-[#050505] rounded-xl overflow-hidden border border-[#333333] flex items-center justify-center">
-                    {/* Render Image: Comparison View, AI Result, or Original Photo */}
-                    <img
-                      src={
-                        showComparisonView
-                          ? './assets/f250_comparison.jpg'
-                          : aiGeneratedImage && !showStockBedInUpload
-                          ? aiGeneratedImage
-                          : uploadedImage
-                      }
-                      alt="Your Truck"
-                      className="w-full h-full object-contain"
-                    />
-
-                    {/* Badge */}
-                    {showComparisonView ? (
-                      <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-20 bg-black/85 text-emerald-400 border border-emerald-500/40 px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider backdrop-blur-md shadow flex items-center gap-1.5">
-                        <Sparkles className="w-3.5 h-3.5" />
-                        EMPIRICAL TEST: Stock Truck vs Fine-Tuned DDFAB LoRA Inpaint
-                      </div>
-                    ) : aiGeneratedImage && !showStockBedInUpload ? (
-                      <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-20 bg-black/85 text-[#FC5716] border border-[#FC5716]/40 px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider backdrop-blur-md shadow flex items-center gap-1.5">
-                        <Sparkles className="w-3.5 h-3.5" />
-                        {uploadFitMode === 'ai-lora' ? 'BETA LORA INPAINT: DD FAB FLATBED' : `AI GENERATED: DD FAB ${overlayBedStyle.replace('-', ' ').toUpperCase()}`}
-                      </div>
-                    ) : showStockBedInUpload ? (
-                      <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-20 bg-black/85 text-amber-400 border border-amber-500/40 px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider backdrop-blur-md shadow">
-                        BEFORE: Factory Pickup Bed
-                      </div>
-                    ) : uploadFitMode === 'manual' ? (
-                      <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-20 bg-black/85 text-[#FC5716] border border-[#FC5716]/40 px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider backdrop-blur-md shadow">
-                        MANUAL FIT: DD Fab Flatbed
-                      </div>
-                    ) : (
-                      <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-20 bg-black/85 text-gray-200 border border-[#444] px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider backdrop-blur-md shadow">
-                        READY FOR AI GENERATION
-                      </div>
-                    )}
-
-                    {/* Manual Vector Overlay (shown only if manual mode enabled and no active AI image view) */}
-                    {uploadFitMode === 'manual' && !aiGeneratedImage && !showStockBedInUpload && (
-                      <div
-                        className="absolute pointer-events-none transition-all duration-300"
-                        style={{
-                          opacity: overlayOpacity / 100,
-                          transform: `translate(${overlayOffsetX}px, ${overlayOffsetY}px) scale(${overlayScale / 100})`,
-                        }}
-                      >
-                        <div className="relative w-80 sm:w-96 rounded-lg bg-black/75 border-2 border-[#FC5716] p-3 text-center backdrop-blur-md shadow-2xl">
-                          <div className="flex items-center justify-between border-b border-[#FC5716]/40 pb-1 mb-1.5">
-                            <span className="text-xs font-heading font-bold text-[#FC5716] uppercase tracking-wider">
-                              DD FAB {overlayBedStyle.replace('-', ' ').toUpperCase()}
-                            </span>
-                            <span className="text-[10px] text-gray-300 font-medium">Rear Axle Fit</span>
-                          </div>
-                          <div className="h-14 border border-dashed border-[#FC5716]/50 rounded bg-[#111]/80 flex items-center justify-around px-2 text-[10px] text-gray-300">
-                            <div className="text-left">
-                              <span className="block text-[9px] text-[#FC5716] font-bold">CAB PROTECTOR</span>
-                              <span>Louvered Rack</span>
-                            </div>
-                            <div className="text-center">
-                              <span className="block text-[9px] text-[#FC5716] font-bold">DECK PLATFORM</span>
-                              <span>Steel Diamond Plate</span>
-                            </div>
-                            <div className="text-right">
-                              <span className="block text-[9px] text-[#FC5716] font-bold">TAIL CONTOUR</span>
-                              <span>LED Oval Tails</span>
-                            </div>
-                          </div>
-                          <p className="text-[10px] text-gray-400 mt-1.5">Use calibration sliders below to align over truck bed</p>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Loading Overlay when Generating */}
-                    {isAiGenerating && (
-                      <div className="absolute inset-0 bg-black/85 backdrop-blur-md z-30 flex flex-col items-center justify-center p-6 space-y-4">
-                        <div className="w-16 h-16 rounded-full border-4 border-[#FC5716]/30 border-t-[#FC5716] animate-spin flex items-center justify-center text-[#FC5716]">
-                          <Sparkles className="w-6 h-6 animate-pulse" />
-                        </div>
-                        <div className="text-center space-y-1">
-                          <div className="font-heading font-bold text-lg text-white tracking-wide">
-                            GENERATING AI FLATBED UPFIT...
-                          </div>
-                          <div className="text-xs text-[#FC5716] font-medium animate-pulse">
-                            {aiStepText}
-                          </div>
-                          <p className="text-[11px] text-gray-400 max-w-sm pt-1">
-                            {uploadFitMode === 'ai-lora'
-                              ? 'Applying custom-trained DD Fab LoRA weights (pytorch_lora_weights.safetensors) and inpainting the bed area...'
-                              : 'Processing vehicle chassis geometry and generating a complete photorealistic commercial flatbed truck...'}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* AI Error Alert */}
-                  {aiError && (
-                    <div className="bg-red-950/80 border border-red-700/50 rounded-lg p-3 text-xs text-red-200 text-center">
-                      {aiError}
-                    </div>
-                  )}
-
-                  {/* Main AI Generation Action Card */}
-                  <div className="bg-gradient-to-r from-[#181818] via-[#151515] to-[#121212] p-4 sm:p-5 rounded-xl border border-[#333] shadow-xl space-y-4">
-                    <div className="flex items-center justify-between flex-wrap gap-2 border-b border-[#252525] pb-3">
-                      <div>
-                        <div className="text-xs text-[#FC5716] font-heading font-bold uppercase tracking-wider flex items-center gap-1.5">
-                          <Sparkles className="w-3.5 h-3.5" />
-                          DDfab Reference-Locked AI Engines
-                        </div>
-                        <p className="text-xs text-gray-300 mt-0.5">
-                          Locked to authentic DDfab reference photos for exact angled oval LED layouts, headache racks, and branded ddFab.co mud flaps:
-                        </p>
-                      </div>
-
-                      {/* 3-Mode Switcher */}
-                      <div className="flex items-center space-x-1 bg-[#101010] p-1 rounded-lg border border-[#2a2a2a] text-xs flex-wrap">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setUploadFitMode('ai-concept');
-                            setAiGeneratedImage(null);
-                            setShowComparisonView(false);
-                          }}
-                          className={`px-3 py-1.5 rounded text-xs font-semibold cursor-pointer transition ${
-                            uploadFitMode === 'ai-concept' ? 'bg-[#FC5716] text-black font-bold' : 'text-gray-400 hover:text-white'
-                          }`}
-                        >
-                          1. Exact Rim & DDfab Lock (Default)
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setUploadFitMode('ai-lora');
-                            setAiGeneratedImage(null);
-                            setShowComparisonView(false);
-                          }}
-                          className={`px-3 py-1.5 rounded text-xs font-semibold cursor-pointer transition ${
-                            uploadFitMode === 'ai-lora' ? 'bg-amber-500 text-black font-bold' : 'text-gray-400 hover:text-white'
-                          }`}
-                        >
-                          2. Pro Studio DDfab Upfit
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setUploadFitMode('manual');
-                            setAiGeneratedImage(null);
-                            setShowComparisonView(false);
-                          }}
-                          className={`px-3 py-1.5 rounded text-xs font-semibold cursor-pointer transition ${
-                            uploadFitMode === 'manual' ? 'bg-[#FC5716] text-black font-bold' : 'text-gray-400 hover:text-white'
-                          }`}
-                        >
-                          3. Manual Photo Fit
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Mode Information Callout */}
-                    {uploadFitMode === 'ai-concept' && (
-                      <div className="text-xs text-gray-300 bg-[#151515] p-3 rounded-lg border border-[#262626] space-y-1">
-                        <span className="font-bold text-[#FC5716]">Mode 1 (Exact Truck & Rim Preservation + DDfab Reference Lock): </span>
-                        <span>Preserves 100% of the customer's original truck cab, rims, tires, and background while locking to authentic DDfab reference photos to render the exact angled dual oval LED tail lights, angled white reverse LEDs, louvered headache rack, and branded ddFab.co mud flaps.</span>
-                      </div>
-                    )}
-
-                    {uploadFitMode === 'ai-lora' && (
-                      <div className="text-xs text-amber-200/90 bg-amber-950/30 p-3 rounded-lg border border-amber-600/40 space-y-1">
-                        <span className="font-bold text-amber-400">Mode 2 (Pro Studio DDfab Reference Engine): </span>
-                        <span>High-contrast commercial showroom finish locked to DDfab reference geometry, featuring contoured underbody toolboxes, octagonal fender arches, exact angled oval LED tail lights, and branded ddFab.co mud flaps.</span>
-                      </div>
-                    )}
-
-                    {uploadFitMode === 'manual' && (
-                      <div className="text-xs text-gray-300 bg-[#151515] p-3 rounded-lg border border-[#262626] space-y-1">
-                        <span className="font-bold text-[#FC5716]">Mode 3 (2D Overlay Slider): </span>
-                        <span>Position authentic DD Fab bed cutouts directly over your truck with alignment sliders.</span>
-                      </div>
-                    )}
-
-                    {uploadFitMode !== 'manual' && (
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end pt-1">
-                        <div>
-                          <label className="text-xs font-semibold text-gray-300 block mb-1">Target DD Fab Bed Model:</label>
-                          <select
-                            value={overlayBedStyle}
-                            onChange={(e) => setOverlayBedStyle(e.target.value)}
-                            className="w-full bg-[#111] border border-[#333] rounded px-3 py-2 text-xs text-white outline-none focus:border-[#FC5716]"
-                          >
-                            <option value="deluxe-skirted">Deluxe Skirted Bed (Contoured toolboxes)</option>
-                            <option value="standard-work">Standard Utility Bed (Rub rails & stake pockets)</option>
-                            <option value="heritage-wood">Heritage Wood Inlay (Hardwood timber deck)</option>
-                            <option value="dually-hd-skirt">Dually (DRW) Heavy Duty (Flared skirts)</option>
-                          </select>
-                        </div>
-
-                        <div className="sm:col-span-2 flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            onClick={handleGenerateAiFlatbed}
-                            disabled={isAiGenerating}
-                            className={`flex-1 py-2.5 px-4 disabled:opacity-50 text-black font-heading font-bold text-xs sm:text-sm tracking-wider rounded-lg shadow-lg flex items-center justify-center gap-2 cursor-pointer transition ${
-                              uploadFitMode === 'ai-lora' ? 'bg-amber-400 hover:bg-amber-300 shadow-amber-400/20' : 'bg-[#FC5716] hover:bg-[#ff692a] shadow-[#FC5716]/30'
-                            }`}
-                          >
-                            <Sparkles className="w-4 h-4" />
-                            <span>
-                              {isAiGenerating
-                                ? 'GENERATING DDFAB FLATBED...'
-                                : uploadFitMode === 'ai-lora'
-                                ? 'GENERATE PRO STUDIO DDFAB UPFIT'
-                                : 'GENERATE DDFAB FLATBED (LOCK RIMS & SPECS)'}
-                            </span>
-                          </button>
-
-                          {aiGeneratedImage && (
-                            <a
-                              href={aiGeneratedImage}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              download="carolina_flatbed_ai_render.jpg"
-                              className="py-2.5 px-3 bg-[#202020] hover:bg-[#282828] text-gray-200 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition border border-[#333]"
-                            >
-                              <Download className="w-3.5 h-3.5" />
-                              <span>Save Image</span>
-                            </a>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {aiGeneratedImage && (
-                      <div className="bg-[#101912] border border-emerald-600/40 rounded-lg p-2.5 text-xs text-emerald-300 flex items-center justify-between gap-2 flex-wrap">
-                        <div className="flex items-center gap-1.5">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                          <span>AI flatbed successfully rendered and fit to your truck.</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {uploadedImage?.includes('stock_f250') && (
-                            <button
-                              type="button"
-                              onClick={() => setShowComparisonView(!showComparisonView)}
-                              className="text-xs font-bold text-emerald-400 underline hover:text-emerald-300 cursor-pointer"
-                            >
-                              {showComparisonView ? 'View Single Result' : 'View Side-by-Side Test'}
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setShowComparisonView(false);
-                              setShowStockBedInUpload(!showStockBedInUpload);
-                            }}
-                            className="text-xs font-bold text-amber-400 underline hover:text-amber-300 cursor-pointer"
-                          >
-                            {showStockBedInUpload ? 'View AI Flatbed' : 'Compare Original Truck'}
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Manual Calibration Controls (when in manual mode) */}
-                  {uploadFitMode === 'manual' && (
-                    <div className="space-y-3 bg-[#181818] p-3.5 sm:p-4 rounded-lg border border-[#252525]">
-                      <div className="text-xs font-bold text-gray-300">2D Vector Alignment Sliders</div>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div>
-                          <label className="text-xs font-semibold text-gray-300 block mb-1">
-                            Horizontal (X: {overlayOffsetX}px):
-                          </label>
-                          <input
-                            type="range"
-                            min="-120"
-                            max="120"
-                            value={overlayOffsetX}
-                            onChange={(e) => setOverlayOffsetX(Number(e.target.value))}
-                            className="w-full accent-[#FC5716]"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="text-xs font-semibold text-gray-300 block mb-1">
-                            Vertical (Y: {overlayOffsetY}px):
-                          </label>
-                          <input
-                            type="range"
-                            min="-100"
-                            max="100"
-                            value={overlayOffsetY}
-                            onChange={(e) => setOverlayOffsetY(Number(e.target.value))}
-                            className="w-full accent-[#FC5716]"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="text-xs font-semibold text-gray-300 block mb-1">
-                            Scale ({overlayScale}%):
-                          </label>
-                          <input
-                            type="range"
-                            min="70"
-                            max="140"
-                            value={overlayScale}
-                            onChange={(e) => setOverlayScale(Number(e.target.value))}
-                            className="w-full accent-[#FC5716]"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="pt-1">
-                        <button
-                          onClick={() => {
-                            setOverlayOffsetX(0);
-                            setOverlayOffsetY(0);
-                            setOverlayScale(100);
-                            setOverlayOpacity(95);
-                          }}
-                          className="px-3 py-1.5 bg-[#202020] hover:bg-[#282828] text-gray-300 rounded text-xs font-semibold transition flex items-center gap-1.5 cursor-pointer"
-                        >
-                          <RotateCcw className="w-3.5 h-3.5" />
-                          <span>Reset Alignment</span>
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Bottom Navigation & Quote Submission */}
-                  <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-[#222]">
-                    <button
-                      onClick={() => setActiveTab('configurator')}
-                      className="px-4 py-2 bg-[#1f1f1f] text-gray-300 hover:text-white rounded text-xs font-semibold transition cursor-pointer"
-                    >
-                      Back to Studio
-                    </button>
-                    <button
-                      onClick={() => {
-                        setSelectedModelId(overlayBedStyle);
-                        setIsPhotoQuote(true);
-                        setIsQuoteModalOpen(true);
-                      }}
-                      className="px-5 py-2.5 bg-[#FC5716] text-black font-heading font-bold text-xs sm:text-sm tracking-wide rounded hover:bg-[#ff692a] transition shadow-lg shadow-[#FC5716]/30 cursor-pointer"
-                    >
-                      REQUEST QUOTE WITH THIS BUILD
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                /* Empty Upload Dropzone + Sample Truck Option */
-                <div className="space-y-4">
-                  <div
-                    onClick={() => fileInputRef.current?.click()}
-                    className="border-2 border-dashed border-[#333333] hover:border-[#FC5716] rounded-xl p-8 sm:p-12 text-center cursor-pointer transition bg-[#141414] hover:bg-[#181818] space-y-3"
-                  >
-                    <div className="w-14 h-14 rounded-full bg-[#222222] flex items-center justify-center mx-auto text-[#FC5716]">
-                      <Camera className="w-7 h-7" />
-                    </div>
-                    <div>
-                      <h3 className="font-heading font-bold text-lg text-white">CLICK TO UPLOAD YOUR TRUCK</h3>
-                      <p className="text-xs text-gray-400 mt-1 max-w-sm mx-auto">
-                        Upload a side-profile or rear 3/4 photo of your truck (JPG, PNG, WebP up to 10MB).
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Sample Truck Quick Test */}
-                  <div className="bg-[#161616] p-4 rounded-xl border border-[#262626] flex items-center justify-between gap-3 flex-wrap">
-                    <div className="space-y-0.5">
-                      <div className="text-xs font-heading font-bold text-white flex items-center gap-1.5">
-                        <Sparkles className="w-3.5 h-3.5 text-[#FC5716]" />
-                        Don't have a truck photo handy?
-                      </div>
-                      <p className="text-[11px] text-gray-400">
-                        Try our sample 2022 GMC Sierra 2500 HD Denali to test the AI flatbed generator instantly.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleUseSampleTruck}
-                      className="px-4 py-2 bg-[#252525] hover:bg-[#303030] text-[#FC5716] border border-[#FC5716]/40 hover:border-[#FC5716] font-semibold text-xs rounded-lg transition cursor-pointer shrink-0"
-                    >
-                      Try Sample Truck
-                    </button>
-                  </div>
+                    Enter Your Truck Make & Model
+                  </label>
+                  <input
+                    id="custom-truck-input"
+                    type="text"
+                    placeholder="e.g. 2018 Nissan Titan XD or Ford F-450"
+                    value={customMakeModel}
+                    onChange={(e) => setCustomMakeModel(e.target.value)}
+                    className="w-full bg-[#1a1a1a] border border-[#333333] focus:border-[#FC5716] rounded-lg px-3.5 py-2.5 text-sm text-white outline-none"
+                  />
                 </div>
               )}
-            </div>
-          </div>
-        )}
-      </main>
 
-      {/* Mobile Sticky Bottom Action Bar */}
-      <div className="fixed bottom-0 inset-x-0 z-30 lg:hidden bg-[#0c0c0c]/95 border-t border-[#252525] px-4 py-2.5 backdrop-blur-md shadow-2xl flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <div className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold truncate">
-            {activeTab === 'configurator' ? currentModel.name : 'Custom DD Fab Fit'}
-          </div>
-          <div className="font-heading font-bold text-sm sm:text-base text-white">
-            {formattedPriceRange}
-          </div>
-        </div>
-        <button
-          onClick={() => {
-            setIsPhotoQuote(activeTab === 'upload');
-            setIsQuoteModalOpen(true);
-          }}
-          className="px-4 py-2 bg-[#FC5716] hover:bg-[#ff692a] text-black font-heading font-bold text-xs tracking-wider rounded-lg shadow-lg shadow-[#FC5716]/30 flex items-center gap-1.5 cursor-pointer shrink-0"
-        >
-          <span>Request Quote</span>
-          <ArrowRight className="w-3.5 h-3.5" />
-        </button>
-      </div>
-
-      {/* Quote Request Modal */}
-      {isQuoteModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm overflow-y-auto p-3 sm:p-4 flex items-start sm:items-center justify-center">
-          <div className="bg-[#121212] border border-[#333333] rounded-2xl max-w-xl w-full p-4 sm:p-6 shadow-2xl space-y-4 my-auto relative max-h-[92vh] overflow-y-auto">
-            <button
-              onClick={() => {
-                setIsQuoteModalOpen(false);
-                setQuoteSubmitted(false);
-                setValidationError(null);
-              }}
-              className="absolute top-3.5 right-3.5 text-gray-400 hover:text-white text-xl font-bold w-8 h-8 rounded-full bg-[#1c1c1c] flex items-center justify-center cursor-pointer"
-            >
-              &times;
-            </button>
-
-            {!quoteSubmitted ? (
-              <form onSubmit={handleQuoteSubmit} className="space-y-4">
-                <div className="border-b border-[#222222] pb-3 pr-8">
-                  <h3 className="font-heading font-bold text-xl sm:text-2xl text-white flex items-center gap-2">
-                    <Wrench className="w-5 h-5 text-[#FC5716] shrink-0" />
-                    REQUEST YOUR CUSTOM BUILD QUOTE
-                  </h3>
-                  <p className="text-xs text-gray-400 mt-1">
-                    Your specs are pre-populated below. Mark Richards will review and contact you with exact pricing and schedule.
-                  </p>
+              {/* Wheel Config & Bed Length Pills (Matching Mark's PDF tables) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 mb-5">
+                <div>
+                  <span className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">
+                    Rear Wheel Configuration
+                  </span>
+                  <div className="grid grid-cols-3 gap-1.5 bg-[#181818] p-1 rounded-lg border border-[#2c2c2c]">
+                    {(
+                      [
+                        { id: 'srw', label: 'SRW (Single)' },
+                        { id: 'dually', label: 'Dually (DRW)' },
+                        { id: 'cab-chassis', label: 'Cab/Chassis' }
+                      ] as { id: WheelConfig; label: string }[]
+                    ).map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => setWheelConfig(item.id)}
+                        className={`py-2 px-2 rounded-md text-xs font-semibold transition cursor-pointer text-center ${
+                          wheelConfig === item.id
+                            ? 'bg-[#FC5716] text-black font-bold shadow'
+                            : 'text-gray-300 hover:text-white hover:bg-[#222222]'
+                        }`}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
-                {/* Validation Error Message */}
-                {validationError && (
-                  <div className="bg-red-950/80 border border-red-700/50 rounded-lg p-2.5 text-xs text-red-200">
-                    {validationError}
+                <div>
+                  <span className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">
+                    Bed Length
+                  </span>
+                  <div className="grid grid-cols-2 gap-1.5 bg-[#181818] p-1 rounded-lg border border-[#2c2c2c]">
+                    {(
+                      [
+                        { id: 'short', label: 'Short Bed (SB)' },
+                        { id: 'long', label: 'Long Bed (LB)' }
+                      ] as { id: BedLength; label: string }[]
+                    ).map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => setBedLength(item.id)}
+                        className={`py-2 px-2.5 rounded-md text-xs font-semibold transition cursor-pointer text-center ${
+                          bedLength === item.id
+                            ? 'bg-[#FC5716] text-black font-bold shadow'
+                            : 'text-gray-300 hover:text-white hover:bg-[#222222]'
+                        }`}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
                   </div>
+                </div>
+              </div>
+
+              {/* Photo Upload Dropzone */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-xs font-semibold text-gray-300 uppercase tracking-wider">
+                    Your Truck Photo
+                  </span>
+                  {uploadedImage && (
+                    <span className="text-xs text-emerald-400 font-medium flex items-center gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      {activeSampleId ? 'Sample truck loaded' : 'Custom photo ready'}
+                    </span>
+                  )}
+                </div>
+
+                <div
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setIsDraggingOver(true);
+                  }}
+                  onDragLeave={() => setIsDraggingOver(false)}
+                  onDrop={handleDrop}
+                  onClick={() => fileInputRef.current?.click()}
+                  className={`border-2 border-dashed rounded-xl p-4 sm:p-5 text-center transition cursor-pointer ${
+                    isDraggingOver
+                      ? 'border-[#FC5716] bg-[#FC5716]/10'
+                      : 'border-[#333333] hover:border-[#FC5716]/70 bg-[#171717]/80 hover:bg-[#1b1b1b]'
+                  }`}
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                  />
+                  <div className="flex flex-col sm:flex-row items-center justify-center gap-3.5">
+                    {uploadedImage && (
+                      <img
+                        src={uploadedImage}
+                        alt="Selected pickup truck"
+                        className="w-24 h-16 object-cover rounded-lg border border-[#333333] shrink-0"
+                      />
+                    )}
+                    <div className="text-center sm:text-left">
+                      <div className="inline-flex items-center gap-2 text-sm font-bold text-white">
+                        <Camera className="w-4 h-4 text-[#FC5716]" />
+                        <span>
+                          {uploadedImage
+                            ? 'Upload Your Own Truck Photo Instead'
+                            : 'Click or Drag & Drop Your Truck Photo Here'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        Side or rear three-quarter angle works best (JPG, PNG, or WebP up to 10MB)
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {uploadError && (
+                  <p className="mt-2 text-xs text-red-400 font-medium">{uploadError}</p>
                 )}
 
-                {/* Build Summary Chip Bar */}
-                <div className="bg-[#181818] p-3 rounded-lg border border-[#252525] text-xs space-y-1">
-                  <div className="text-[#FC5716] font-bold font-heading text-xs sm:text-sm uppercase flex items-center justify-between">
-                    <span>Configured: {selectedMake} {selectedCab} - {selectedBedLength}</span>
-                    <span className="text-white">{formattedPriceRange}</span>
+                {/* 4 One-Click Sample Trucks */}
+                <div className="mt-3.5">
+                  <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                    No photo handy? Try a sample truck with 1 click:
                   </div>
-                  <div className="text-gray-300 font-medium">
-                    Bed: {currentModel.name} | Deck: {selectedDeckFinish} | Rack: {selectedHeadacheRack}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {SAMPLE_TRUCKS.map((sample) => {
+                      const isSelected = activeSampleId === sample.id;
+                      return (
+                        <button
+                          key={sample.id}
+                          type="button"
+                          onClick={() => handleSelectSampleTruck(sample)}
+                          className={`group flex items-center gap-2 p-1.5 rounded-lg border text-left transition cursor-pointer ${
+                            isSelected
+                              ? 'border-[#FC5716] bg-[#FC5716]/15 text-white'
+                              : 'border-[#2a2a2a] bg-[#181818] text-gray-300 hover:border-gray-500'
+                          }`}
+                        >
+                          <img
+                            src={sample.beforeImage}
+                            alt={sample.label}
+                            className="w-10 h-8 rounded object-cover shrink-0 border border-[#333333]"
+                          />
+                          <span className="text-[11px] font-semibold leading-tight line-clamp-2">
+                            {sample.shortLabel}
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
-                  <div className="text-gray-400 text-[11px]">
-                    Included: {selectedAccessories.length > 0 ? selectedAccessories.join(', ') : 'Standard Bed Package'}
+                </div>
+              </div>
+            </section>
+
+            {/* ========================================================= */}
+            {/* STEP 2: PICK YOUR FLATBED OPTIONS (1:1 WITH MARK'S PDFS)  */}
+            {/* ========================================================= */}
+            <section className="bg-[#121212] border border-[#262626] rounded-xl p-4 sm:p-6 shadow-xl">
+              <div className="flex items-center justify-between gap-2 pb-4 mb-5 border-b border-[#222222]">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-7 h-7 rounded-full bg-[#FC5716] text-black font-heading font-bold text-sm flex items-center justify-center shrink-0">
+                    2
+                  </span>
+                  <div>
+                    <h2 className="font-heading text-base sm:text-lg font-bold text-white tracking-wide uppercase">
+                      Step 2: Pick Your Flatbed Options
+                    </h2>
+                    <p className="text-xs text-gray-400">
+                      Choose skirted or non-skirted, deck material, and authentic DD Fab add-ons
+                    </p>
                   </div>
-                  {isPhotoQuote && (
-                    <div className="text-[11px] text-emerald-400 font-medium flex items-center gap-1 pt-0.5">
-                      <Sparkles className="w-3 h-3" />
-                      Includes customer truck photo calibration for installation fit review.
+                </div>
+              </div>
+
+              {/* 2A. FLATBED MODEL: STANDARD (NON-SKIRTED) VS FULL SKIRTED */}
+              <div className="mb-6">
+                <div className="flex items-center justify-between mb-2.5">
+                  <h3 className="text-xs sm:text-sm font-bold text-white uppercase tracking-wider">
+                    1. Choose Flatbed Style (Non-Skirted vs. Full Skirted)
+                  </h3>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  {/* Standard Model (Non-Skirted) */}
+                  <button
+                    type="button"
+                    onClick={() => setBedStyle('standard')}
+                    className={`group rounded-xl overflow-hidden border-2 text-left transition flex flex-col cursor-pointer ${
+                      bedStyle === 'standard'
+                        ? 'border-[#FC5716] bg-[#1b1613] shadow-lg shadow-[#FC5716]/10'
+                        : 'border-[#2a2a2a] bg-[#181818] hover:border-gray-500'
+                    }`}
+                  >
+                    <div className="relative aspect-[16/10] w-full bg-[#0d0d0d] overflow-hidden">
+                      <img
+                        src="./assets/options/style_standard_model.jpg"
+                        alt="Standard Model (Non-Skirted) DD Fab Flatbed"
+                        className="w-full h-full object-cover group-hover:scale-[1.02] transition duration-300"
+                      />
+                      <div className="absolute top-2.5 right-2.5">
+                        <span
+                          className={`w-6 h-6 rounded-full flex items-center justify-center border ${
+                            bedStyle === 'standard'
+                              ? 'bg-[#FC5716] border-[#FC5716] text-black'
+                              : 'bg-black/70 border-white/40 text-transparent'
+                          }`}
+                        >
+                          <Check className="w-3.5 h-3.5 stroke-[3]" />
+                        </span>
+                      </div>
                     </div>
+                    <div className="p-3.5 flex-1 flex flex-col justify-between">
+                      <div>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-heading font-bold text-base text-white">
+                            Standard Model (Non-Skirted)
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-400 mt-1 leading-relaxed">
+                          Clean flat-channel perimeter frame with tapered rear apron, louvered headache rack, and optional underbody boxes or fenders.
+                        </p>
+                      </div>
+                      {showPrices && (
+                        <div className="mt-2.5 pt-2 border-t border-[#2c2c2c] text-xs font-semibold text-[#FC5716]">
+                          Starting at $5,495 + $775 install
+                        </div>
+                      )}
+                    </div>
+                  </button>
+
+                  {/* Full Skirted Model */}
+                  <button
+                    type="button"
+                    onClick={() => setBedStyle('full-skirted')}
+                    className={`group rounded-xl overflow-hidden border-2 text-left transition flex flex-col cursor-pointer ${
+                      bedStyle === 'full-skirted'
+                        ? 'border-[#FC5716] bg-[#1b1613] shadow-lg shadow-[#FC5716]/10'
+                        : 'border-[#2a2a2a] bg-[#181818] hover:border-gray-500'
+                    }`}
+                  >
+                    <div className="relative aspect-[16/10] w-full bg-[#0d0d0d] overflow-hidden">
+                      <img
+                        src="./assets/options/style_full_skirted.jpg"
+                        alt="Full Skirted Model DD Fab Flatbed"
+                        className="w-full h-full object-cover group-hover:scale-[1.02] transition duration-300"
+                      />
+                      <div className="absolute top-2.5 right-2.5">
+                        <span
+                          className={`w-6 h-6 rounded-full flex items-center justify-center border ${
+                            bedStyle === 'full-skirted'
+                              ? 'bg-[#FC5716] border-[#FC5716] text-black'
+                              : 'bg-black/70 border-white/40 text-transparent'
+                          }`}
+                        >
+                          <Check className="w-3.5 h-3.5 stroke-[3]" />
+                        </span>
+                      </div>
+                    </div>
+                    <div className="p-3.5 flex-1 flex flex-col justify-between">
+                      <div>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-heading font-bold text-base text-white">
+                            Full Skirted Model
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-400 mt-1 leading-relaxed">
+                          Full contoured steel lower side skirts with 4 integrated weatherproof lockable T-handle underbody toolboxes built in.
+                        </p>
+                      </div>
+                      {showPrices && (
+                        <div className="mt-2.5 pt-2 border-t border-[#2c2c2c] text-xs font-semibold text-[#FC5716]">
+                          Starting at $7,925 + $775 install
+                        </div>
+                      )}
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              {/* 2B. CHOOSE YOUR DECK TYPE (WOOD, TREX, STEEL) */}
+              <div className="mb-6">
+                <h3 className="text-xs sm:text-sm font-bold text-white uppercase tracking-wider mb-2.5">
+                  2. Choose Your Deck Type
+                </h3>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {(
+                    [
+                      {
+                        id: 'wood',
+                        name: 'Wood Deck',
+                        desc: 'Stained hardwood deck planks with recessed gooseneck hatch',
+                        image: './assets/options/deck_wood.jpg'
+                      },
+                      {
+                        id: 'trex',
+                        name: 'Trex Deck',
+                        desc: 'Composite low-maintenance weather-resistant Trex decking',
+                        image: './assets/options/deck_trex.jpg'
+                      },
+                      {
+                        id: 'steel',
+                        name: 'Steel Deck',
+                        desc: 'Heavy-duty textured diamond-plate steel deck surface',
+                        image:
+                          bedStyle === 'full-skirted'
+                            ? './assets/options/deck_steel_skirted.jpg'
+                            : './assets/options/deck_steel.jpg'
+                      }
+                    ] as { id: DeckType; name: string; desc: string; image: string }[]
+                  ).map((deck) => {
+                    const isSelected = deckType === deck.id;
+                    const priceRow = BASE_PRICE_TABLE[bedStyle][deck.id];
+                    const deckBasePrice =
+                      wheelConfig === 'cab-chassis'
+                        ? 'Call for pricing'
+                        : wheelConfig === 'dually'
+                        ? `$${priceRow.dually.toLocaleString()} + $${priceRow.install} Install`
+                        : `$${priceRow.srw.toLocaleString()} + $${priceRow.install} Install`;
+
+                    return (
+                      <button
+                        key={deck.id}
+                        type="button"
+                        onClick={() => setDeckType(deck.id)}
+                        className={`group rounded-xl overflow-hidden border-2 text-left transition flex flex-col cursor-pointer ${
+                          isSelected
+                            ? 'border-[#FC5716] bg-[#1b1613] shadow-md shadow-[#FC5716]/10'
+                            : 'border-[#2a2a2a] bg-[#181818] hover:border-gray-500'
+                        }`}
+                      >
+                        <div className="relative aspect-[16/10] w-full bg-[#0d0d0d] overflow-hidden">
+                          <img
+                            src={deck.image}
+                            alt={deck.name}
+                            className="w-full h-full object-cover group-hover:scale-[1.03] transition duration-300"
+                          />
+                          <div className="absolute top-2 right-2">
+                            <span
+                              className={`w-5 h-5 rounded-full flex items-center justify-center border ${
+                                isSelected
+                                  ? 'bg-[#FC5716] border-[#FC5716] text-black'
+                                  : 'bg-black/70 border-white/40 text-transparent'
+                              }`}
+                            >
+                              <Check className="w-3 h-3 stroke-[3]" />
+                            </span>
+                          </div>
+                        </div>
+                        <div className="p-3 flex-1 flex flex-col justify-between">
+                          <div>
+                            <div className="font-heading font-bold text-sm sm:text-base text-white">
+                              {deck.name}
+                            </div>
+                            <p className="text-[11px] text-gray-400 mt-0.5 leading-snug">
+                              {deck.desc}
+                            </p>
+                          </div>
+                          {showPrices && (
+                            <div className="mt-2 pt-1.5 border-t border-[#2c2c2c] text-[11px] font-semibold text-[#FC5716]">
+                              {deckBasePrice}
+                            </div>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 2C. CHOOSE YOUR ADD-ONS */}
+              <div>
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5">
+                  <h3 className="text-xs sm:text-sm font-bold text-white uppercase tracking-wider">
+                    3. Choose Your Add-Ons (Optional)
+                  </h3>
+                  {bedStyle === 'full-skirted' && (
+                    <span className="text-[11px] text-emerald-400 bg-emerald-950/50 border border-emerald-700/40 px-2.5 py-0.5 rounded-full font-medium">
+                      Full Skirted includes integrated underbody toolboxes & contoured fenders
+                    </span>
                   )}
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs font-semibold text-gray-300 block mb-1">Your Full Name *</label>
-                    <input
-                      type="text"
-                      required
-                      value={formData.name}
-                      onChange={(e) => {
-                        setValidationError(null);
-                        setFormData({ ...formData, name: e.target.value });
-                      }}
-                      placeholder="e.g. John Miller"
-                      className="w-full bg-[#181818] border border-[#333333] focus:border-[#FC5716] rounded px-3 py-2 text-xs text-white outline-none"
-                    />
-                  </div>
+                  {visibleVisualAddOns.map((addon) => {
+                    const isSelected = selectedAddOns.includes(addon.id);
+                    const isDisabledByBed =
+                      (addon.bedRestriction === 'long-only' && bedLength !== 'long') ||
+                      (addon.bedRestriction === 'short-only' && bedLength !== 'short');
+                    const thumbSrc =
+                      bedStyle === 'full-skirted' && addon.skirtedImage
+                        ? addon.skirtedImage
+                        : addon.image;
 
-                  <div>
-                    <label className="text-xs font-semibold text-gray-300 block mb-1">Phone Number *</label>
-                    <input
-                      type="tel"
-                      required
-                      value={formData.phone}
-                      onChange={(e) => {
-                        setValidationError(null);
-                        setFormData({ ...formData, phone: e.target.value });
-                      }}
-                      placeholder="e.g. (843) 555-0192"
-                      className="w-full bg-[#181818] border border-[#333333] focus:border-[#FC5716] rounded px-3 py-2 text-xs text-white outline-none"
-                    />
-                  </div>
+                    return (
+                      <div
+                        key={addon.id}
+                        onClick={() => {
+                          if (!isDisabledByBed) toggleAddOn(addon);
+                        }}
+                        className={`rounded-xl border p-2.5 flex items-center gap-3 transition ${
+                          isDisabledByBed
+                            ? 'border-[#222222] bg-[#141414] opacity-50 cursor-not-allowed'
+                            : isSelected
+                            ? 'border-[#FC5716] bg-[#1b1613] cursor-pointer shadow-sm'
+                            : 'border-[#2a2a2a] bg-[#181818] hover:border-gray-500 cursor-pointer'
+                        }`}
+                      >
+                        <img
+                          src={thumbSrc}
+                          alt={addon.name}
+                          className="w-20 h-16 rounded-lg object-cover shrink-0 border border-[#333333]"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start justify-between gap-1.5">
+                            <span className="font-heading font-bold text-sm text-white leading-tight">
+                              {addon.name}
+                            </span>
+                            <span
+                              className={`w-5 h-5 rounded flex items-center justify-center shrink-0 border ${
+                                isSelected
+                                  ? 'bg-[#FC5716] border-[#FC5716] text-black'
+                                  : 'bg-[#121212] border-[#3a3a3a] text-transparent'
+                              }`}
+                            >
+                              <Check className="w-3.5 h-3.5 stroke-[3]" />
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-gray-400 mt-0.5 leading-snug">
+                            {addon.shortDesc}
+                          </p>
+                          <div className="flex items-center justify-between gap-2 mt-1.5">
+                            {isDisabledByBed ? (
+                              <span className="text-[10px] font-semibold text-amber-400">
+                                {addon.bedRestriction === 'long-only'
+                                  ? 'Requires Long Bed (LB)'
+                                  : 'Requires Short Bed (SB)'}
+                              </span>
+                            ) : showPrices ? (
+                              <span className="text-[11px] font-semibold text-[#FC5716]">
+                                {addon.priceLabel}
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-medium text-gray-400">
+                                {isSelected ? 'Selected for build' : 'Click to add'}
+                              </span>
+                            )}
 
-                  <div>
-                    <label className="text-xs font-semibold text-gray-300 block mb-1">Email Address *</label>
-                    <input
-                      type="email"
-                      required
-                      value={formData.email}
-                      onChange={(e) => {
-                        setValidationError(null);
-                        setFormData({ ...formData, email: e.target.value });
-                      }}
-                      placeholder="e.g. jmiller@gmail.com"
-                      className="w-full bg-[#181818] border border-[#333333] focus:border-[#FC5716] rounded px-3 py-2 text-xs text-white outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-semibold text-gray-300 block mb-1">City or Zip Code *</label>
-                    <input
-                      type="text"
-                      required
-                      value={formData.cityZip}
-                      onChange={(e) => {
-                        setValidationError(null);
-                        setFormData({ ...formData, cityZip: e.target.value });
-                      }}
-                      placeholder="e.g. Charleston, SC 29401"
-                      className="w-full bg-[#181818] border border-[#333333] focus:border-[#FC5716] rounded px-3 py-2 text-xs text-white outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-semibold text-gray-300 block mb-1">Company / Fleet Name (Optional)</label>
-                    <input
-                      type="text"
-                      value={formData.companyName}
-                      onChange={(e) => {
-                        setValidationError(null);
-                        setFormData({ ...formData, companyName: e.target.value });
-                      }}
-                      placeholder="e.g. Lowcountry Logistics LLC"
-                      className="w-full bg-[#181818] border border-[#333333] focus:border-[#FC5716] rounded px-3 py-2 text-xs text-white outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-semibold text-gray-300 block mb-1">Fleet Size</label>
-                    <select
-                      value={formData.fleetSize}
-                      onChange={(e) => {
-                        setValidationError(null);
-                        setFormData({ ...formData, fleetSize: e.target.value });
-                      }}
-                      className="w-full bg-[#181818] border border-[#333333] focus:border-[#FC5716] rounded px-3 py-2 text-xs text-white outline-none"
-                    >
-                      <option value="1 Truck (Single Operator)">1 Truck (Single Operator)</option>
-                      <option value="2-5 Trucks (Small Fleet)">2-5 Trucks (Small Fleet)</option>
-                      <option value="6-15 Commercial Haulers">6-15 Commercial Haulers</option>
-                      <option value="16+ Enterprise Fleet">16+ Enterprise Fleet</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-semibold text-gray-300 block mb-1">Preferred Contact Method</label>
-                    <select
-                      value={formData.preferredContact}
-                      onChange={(e) => {
-                        setValidationError(null);
-                        setFormData({ ...formData, preferredContact: e.target.value });
-                      }}
-                      className="w-full bg-[#181818] border border-[#333333] focus:border-[#FC5716] rounded px-3 py-2 text-xs text-white outline-none"
-                    >
-                      <option value="Phone Call">Phone Call</option>
-                      <option value="Text Message (SMS)">Text Message (SMS)</option>
-                      <option value="Email">Email</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-semibold text-gray-300 block mb-1">Truck Model Year</label>
-                    <input
-                      type="text"
-                      value={formData.truckYear}
-                      onChange={(e) => {
-                        setValidationError(null);
-                        setFormData({ ...formData, truckYear: e.target.value });
-                      }}
-                      placeholder="e.g. 2023"
-                      className="w-full bg-[#181818] border border-[#333333] focus:border-[#FC5716] rounded px-3 py-2 text-xs text-white outline-none"
-                    />
-                  </div>
-
-                  <div className="sm:col-span-2">
-                    <label className="text-xs font-semibold text-gray-300 block mb-1">Installation Timeline</label>
-                    <select
-                      value={formData.timeline}
-                      onChange={(e) => {
-                        setValidationError(null);
-                        setFormData({ ...formData, timeline: e.target.value });
-                      }}
-                      className="w-full bg-[#181818] border border-[#333333] focus:border-[#FC5716] rounded px-3 py-2 text-xs text-white outline-none"
-                    >
-                      <option value="Ready to install (1-2 weeks)">Ready to install (1-2 weeks)</option>
-                      <option value="Next 30 days">Next 30 days</option>
-                      <option value="Next 60-90 days">Next 60-90 days</option>
-                      <option value="Researching pricing">Researching pricing</option>
-                    </select>
-                  </div>
+                            {/* Quantity selector for Inset D-Rings */}
+                            {addon.id === 'inset-drings' && isSelected && (
+                              <div
+                                className="flex items-center gap-1"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <span className="text-[10px] text-gray-400">Qty:</span>
+                                {[2, 4, 6].map((qty) => (
+                                  <button
+                                    key={qty}
+                                    type="button"
+                                    onClick={() => setDRingCount(qty)}
+                                    className={`px-1.5 py-0.5 rounded text-[10px] font-bold cursor-pointer ${
+                                      dRingCount === qty
+                                        ? 'bg-[#FC5716] text-black'
+                                        : 'bg-[#262626] text-gray-300 hover:bg-[#333333]'
+                                    }`}
+                                  >
+                                    {qty}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
 
-                <div>
-                  <label className="text-xs font-semibold text-gray-300 block mb-1">Custom Requests / Notes (Optional)</label>
-                  <textarea
-                    rows={2}
-                    value={formData.notes}
-                    onChange={(e) => {
-                      setValidationError(null);
-                      setFormData({ ...formData, notes: e.target.value });
-                    }}
-                    placeholder="Specific hitch preferences, toolbox dimensions, or commercial requirements..."
-                    className="w-full bg-[#181818] border border-[#333333] focus:border-[#FC5716] rounded px-3 py-2 text-xs text-white outline-none resize-none"
-                  />
-                </div>
-
-                <div className="pt-2">
+                {/* Collapsible Accordion for Additional Factory Install Options (Camera, Sensors, Class V Receiver) */}
+                <div className="mt-4 border border-[#282828] rounded-xl bg-[#161616] overflow-hidden">
                   <button
-                    type="submit"
-                    className="w-full py-3.5 bg-[#FC5716] hover:bg-[#ff692a] text-black font-heading font-bold text-sm sm:text-base tracking-wider rounded-lg transition shadow-lg shadow-[#FC5716]/30 cursor-pointer"
+                    type="button"
+                    onClick={() => setShowExtraAccordion((p) => !p)}
+                    className="w-full px-4 py-3 flex items-center justify-between text-left text-xs font-semibold text-gray-300 hover:text-white transition cursor-pointer"
                   >
-                    SUBMIT QUOTE REQUEST TO CAROLINA FLATBEDS
+                    <span>
+                      Additional Factory Install Options (Backup Camera, Parking Sensors, Class V Receiver)
+                      {selectedExtraInstalls.length > 0 && (
+                        <span className="ml-2 px-2 py-0.5 rounded-full bg-[#FC5716]/20 text-[#FC5716] text-[11px]">
+                          {selectedExtraInstalls.length} selected
+                        </span>
+                      )}
+                    </span>
+                    {showExtraAccordion ? (
+                      <ChevronUp className="w-4 h-4 text-gray-400 shrink-0" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
+                    )}
                   </button>
-                  <p className="text-[11px] text-gray-500 text-center mt-2">
-                    Zero spam. Your inquiry routes directly to Mark Richards at Carolina Flatbeds / DD Fab.
-                  </p>
-                </div>
-              </form>
-            ) : (
-              <div className="py-6 text-center space-y-4">
-                <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-[#FC5716]/20 border border-[#FC5716] flex items-center justify-center mx-auto text-[#FC5716]">
-                  <CheckCircle2 className="w-8 h-8 sm:w-9 sm:h-9" />
-                </div>
-                <div className="space-y-1">
-                  <h3 className="font-heading font-bold text-xl sm:text-2xl text-white">QUOTE REQUEST RECEIVED</h3>
-                  <p className="text-xs text-gray-300 max-w-sm mx-auto">
-                    Thank you, {formData.name || 'there'}! Your configuration has been logged and sent to Carolina Flatbeds.
-                  </p>
-                </div>
 
-                <div className="bg-[#181818] p-4 rounded-xl border border-[#252525] text-left max-w-md mx-auto text-xs space-y-1.5">
-                  <div className="font-bold text-[#FC5716] text-sm font-heading">
-                    REFERENCE: {submittedRefId || 'CFB-RECORDED'}
-                  </div>
-                  <div className="text-gray-300">Vehicle: {selectedMake} {selectedCab} - {selectedBedLength}</div>
-                  <div className="text-gray-300">Chassis: {chassisType === 'pickup-removal' ? 'Pickup Bed Removal' : 'Cab & Chassis (34" Rails)'}</div>
-                  <div className="text-gray-300">Bed: {currentModel.name} - {selectedDeckFinish}</div>
-                  <div className="text-gray-300">Headache Rack: {selectedHeadacheRack}</div>
-                  {formData.companyName && (
-                    <div className="text-gray-300">Company: {formData.companyName} ({formData.fleetSize})</div>
+                  {showExtraAccordion && (
+                    <div className="px-4 pb-3.5 pt-1 border-t border-[#222222] grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                      {EXTRA_INSTALL_OPTIONS.map((extra) => {
+                        const isSelected = selectedExtraInstalls.includes(extra.id);
+                        const disabled = extra.cabChassisOnly && wheelConfig !== 'cab-chassis';
+                        return (
+                          <button
+                            key={extra.id}
+                            type="button"
+                            disabled={disabled}
+                            onClick={() => toggleExtraInstall(extra)}
+                            className={`p-2.5 rounded-lg border text-left transition flex items-start justify-between gap-2 ${
+                              disabled
+                                ? 'border-[#222222] bg-[#121212] opacity-50 cursor-not-allowed'
+                                : isSelected
+                                ? 'border-[#FC5716] bg-[#1b1613] cursor-pointer'
+                                : 'border-[#2c2c2c] bg-[#1a1a1a] hover:border-gray-500 cursor-pointer'
+                            }`}
+                          >
+                            <div>
+                              <div className="text-xs font-bold text-white">{extra.name}</div>
+                              <div className="text-[10px] text-gray-400 mt-0.5">{extra.note}</div>
+                              {showPrices && (
+                                <div className="text-[11px] font-semibold text-[#FC5716] mt-1">
+                                  +${extra.price}
+                                </div>
+                              )}
+                            </div>
+                            <span
+                              className={`w-4 h-4 rounded flex items-center justify-center shrink-0 border mt-0.5 ${
+                                isSelected
+                                  ? 'bg-[#FC5716] border-[#FC5716] text-black'
+                                  : 'border-[#3a3a3a] bg-[#121212] text-transparent'
+                              }`}
+                            >
+                              <Check className="w-3 h-3 stroke-[3]" />
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
                   )}
-                  <div className="text-white font-semibold">Estimated Range: {formattedPriceRange}</div>
-                  <div className="text-gray-400">Shop Location: Charleston, SC</div>
-                  <div className="text-gray-400">Response Time: Within 24 business hours</div>
                 </div>
 
-                <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+                {/* Action Bar at bottom of Step 2 */}
+                <div className="mt-5 pt-4 border-t border-[#222222] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div className="text-xs text-gray-300">
+                    <span className="font-bold text-white">Selected Setup:</span>{' '}
+                    {truckYear} {resolvedTruckName} ({wheelConfig.toUpperCase()} / {bedLengthLabel}) -{' '}
+                    <span className="text-[#FC5716] font-semibold">
+                      {bedStyleLabel}, {deckTypeLabel}
+                    </span>
+                    {allSelectedAddOnLabels.length > 0 && (
+                      <span> + {allSelectedAddOnLabels.length} add-on(s)</span>
+                    )}
+                  </div>
+
                   <button
                     type="button"
-                    onClick={() => window.print()}
-                    className="px-4 py-2 bg-[#202020] hover:bg-[#282828] text-gray-200 text-xs font-semibold rounded transition flex items-center gap-1.5 cursor-pointer"
+                    disabled={!uploadedImage || isAiGenerating}
+                    onClick={handleGenerateAiFlatbed}
+                    className="px-5 py-3 rounded-xl bg-[#FC5716] hover:bg-[#ff682b] disabled:opacity-50 text-black font-heading font-bold text-sm sm:text-base tracking-wide shadow-lg shadow-[#FC5716]/25 transition flex items-center justify-center gap-2 cursor-pointer shrink-0"
                   >
-                    <Printer className="w-3.5 h-3.5" />
-                    <span>Print / Save Specs</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsQuoteModalOpen(false);
-                      setQuoteSubmitted(false);
-                      setValidationError(null);
-                    }}
-                    className="px-5 py-2 bg-[#2a2a2a] hover:bg-[#333333] text-white text-xs font-bold rounded transition cursor-pointer"
-                  >
-                    Close & Continue Customizing
+                    <Sparkles className="w-4 h-4 fill-black" />
+                    <span>
+                      {isAiGenerating
+                        ? 'AI Generating Your Flatbed...'
+                        : aiGeneratedImage
+                        ? 'Update AI Flatbed Preview'
+                        : 'Generate AI Flatbed Preview'}
+                    </span>
                   </button>
                 </div>
               </div>
+            </section>
+          </div>
+
+          {/* ========================================================= */}
+          {/* RIGHT COLUMN (5 Cols on Desktop): STEP 3 AI MAGIC & QUOTE */}
+          {/* ========================================================= */}
+          <div
+            ref={previewCardRef}
+            className="lg:col-span-5 lg:sticky lg:top-20 flex flex-col space-y-5"
+          >
+            <section className="bg-[#121212] border border-[#262626] rounded-xl p-4 sm:p-5 shadow-2xl">
+              <div className="flex items-center justify-between gap-2 pb-3.5 mb-3.5 border-b border-[#222222]">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-7 h-7 rounded-full bg-[#FC5716] text-black font-heading font-bold text-sm flex items-center justify-center shrink-0">
+                    3
+                  </span>
+                  <div>
+                    <h2 className="font-heading text-base sm:text-lg font-bold text-white tracking-wide uppercase">
+                      Step 3: AI Flatbed Preview & Quote
+                    </h2>
+                    <p className="text-xs text-gray-400">
+                      Generate your preview, compare before & after, and request a quote
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Before / After / Side-by-Side Toggle Bar (when AI render is complete) */}
+              {aiGeneratedImage && !isAiGenerating && (
+                <div className="flex items-center justify-between gap-2 mb-3 bg-[#181818] p-1 rounded-lg border border-[#2c2c2c]">
+                  {(
+                    [
+                      { id: 'after', label: 'After (AI Flatbed)' },
+                      { id: 'before', label: 'Before (Original)' },
+                      { id: 'split', label: 'Side-by-Side' }
+                    ] as { id: 'after' | 'before' | 'split'; label: string }[]
+                  ).map((mode) => (
+                    <button
+                      key={mode.id}
+                      type="button"
+                      onClick={() => setPreviewViewMode(mode.id)}
+                      className={`flex-1 py-1.5 px-2 rounded-md text-xs font-semibold transition cursor-pointer text-center ${
+                        previewViewMode === mode.id
+                          ? 'bg-[#FC5716] text-black font-bold shadow'
+                          : 'text-gray-300 hover:text-white'
+                      }`}
+                    >
+                      {mode.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Live AI Render Viewport */}
+              <div className="relative rounded-xl overflow-hidden border border-[#2e2e2e] bg-[#0a0a0a] aspect-[16/10] flex items-center justify-center">
+                {!uploadedImage ? (
+                  <div className="p-6 text-center">
+                    <ImageIcon className="w-10 h-10 text-gray-600 mx-auto mb-2" />
+                    <p className="text-sm font-semibold text-gray-300">
+                      Upload a photo or select a sample truck in Step 1
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Your truck preview will appear right here
+                    </p>
+                  </div>
+                ) : isAiGenerating ? (
+                  <div className="relative w-full h-full">
+                    <img
+                      src={uploadedImage}
+                      alt="Generating flatbed preview"
+                      className="w-full h-full object-cover opacity-35 blur-[2px]"
+                    />
+                    <div className="absolute inset-0 bg-black/65 flex flex-col items-center justify-center p-5 text-center">
+                      <div className="w-11 h-11 rounded-full border-3 border-[#FC5716] border-t-transparent animate-spin mb-3" />
+                      <div className="font-heading font-bold text-base text-white tracking-wide">
+                        AI UPFITTING YOUR TRUCK...
+                      </div>
+                      <p className="text-xs text-[#FC5716] font-medium mt-1 max-w-xs">
+                        {aiStepText}
+                      </p>
+                    </div>
+                  </div>
+                ) : aiGeneratedImage ? (
+                  previewViewMode === 'split' ? (
+                    <div className="grid grid-cols-2 gap-1 w-full h-full bg-[#1a1a1a]">
+                      <div className="relative w-full h-full overflow-hidden">
+                        <img
+                          src={uploadedImage}
+                          alt="Original pickup truck"
+                          className="w-full h-full object-cover"
+                        />
+                        <span className="absolute bottom-2 left-2 px-2 py-0.5 rounded bg-black/80 text-[10px] font-bold text-gray-200 border border-white/15">
+                          BEFORE
+                        </span>
+                      </div>
+                      <div className="relative w-full h-full overflow-hidden">
+                        <img
+                          src={aiGeneratedImage}
+                          alt="AI generated DD Fab flatbed"
+                          className="w-full h-full object-cover"
+                        />
+                        <span className="absolute bottom-2 left-2 px-2 py-0.5 rounded bg-[#FC5716] text-[10px] font-bold text-black">
+                          AFTER (DD FAB)
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="relative w-full h-full">
+                      <img
+                        src={previewViewMode === 'before' ? uploadedImage : aiGeneratedImage}
+                        alt={
+                          previewViewMode === 'before'
+                            ? 'Original truck photo'
+                            : 'AI rendered DD Fab flatbed'
+                        }
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-md bg-black/80 backdrop-blur-sm border border-white/15 text-[11px] font-bold text-white flex items-center gap-1.5">
+                        <span
+                          className={`w-2 h-2 rounded-full ${
+                            previewViewMode === 'before' ? 'bg-gray-400' : 'bg-[#FC5716]'
+                          }`}
+                        />
+                        <span>
+                          {previewViewMode === 'before'
+                            ? 'Original Truck Photo'
+                            : `AI Render: ${bedStyleLabel} (${deckTypeLabel})`}
+                        </span>
+                      </div>
+                    </div>
+                  )
+                ) : (
+                  <div className="relative w-full h-full">
+                    <img
+                      src={uploadedImage}
+                      alt="Selected truck ready for AI upfit"
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-md bg-black/80 backdrop-blur-sm border border-white/15 text-[11px] font-semibold text-gray-200">
+                      Original Truck (Ready for AI Flatbed Fitment)
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Error alert if AI fails */}
+              {aiError && (
+                <div className="mt-3 p-3 rounded-lg bg-red-950/70 border border-red-700/50 text-xs text-red-200">
+                  {aiError}
+                </div>
+              )}
+
+              {/* Chosen Options Summary Pill Bar */}
+              <div className="mt-3.5 bg-[#171717] border border-[#282828] rounded-xl p-3">
+                <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">
+                  Your Selected Configuration
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  <span className="px-2.5 py-1 rounded-md bg-[#222222] text-xs font-semibold text-white">
+                    {truckYear} {resolvedTruckName}
+                  </span>
+                  <span className="px-2.5 py-1 rounded-md bg-[#222222] text-xs font-semibold text-gray-200">
+                    {wheelConfigLabel} · {bedLengthLabel}
+                  </span>
+                  <span className="px-2.5 py-1 rounded-md bg-[#FC5716]/20 border border-[#FC5716]/40 text-xs font-bold text-[#FC5716]">
+                    {bedStyleLabel}
+                  </span>
+                  <span className="px-2.5 py-1 rounded-md bg-[#FC5716]/20 border border-[#FC5716]/40 text-xs font-bold text-[#FC5716]">
+                    {deckTypeLabel}
+                  </span>
+                  {allSelectedAddOnLabels.map((label) => (
+                    <span
+                      key={label}
+                      className="px-2.5 py-1 rounded-md bg-[#242424] border border-[#363636] text-xs font-medium text-gray-200"
+                    >
+                      + {label}
+                    </span>
+                  ))}
+                </div>
+
+                {/* Optional Price Sheet Breakdown */}
+                {showPrices && (
+                  <div className="mt-3 pt-2.5 border-t border-[#2a2a2a] text-xs space-y-1">
+                    <div className="flex justify-between text-gray-300">
+                      <span>
+                        {bedStyleLabel} - {deckTypeLabel} ({wheelConfig.toUpperCase()}):
+                      </span>
+                      <span className="font-semibold text-white">
+                        {priceBreakdown.basePrice !== null
+                          ? `$${priceBreakdown.basePrice.toLocaleString()}`
+                          : 'Call for pricing'}
+                      </span>
+                    </div>
+                    {priceBreakdown.basePrice !== null && (
+                      <div className="flex justify-between text-gray-400">
+                        <span>Standard Installation:</span>
+                        <span>+${priceBreakdown.installPrice.toLocaleString()}</span>
+                      </div>
+                    )}
+                    {priceBreakdown.itemizedAddOns.map((item) => (
+                      <div key={item.label} className="flex justify-between text-gray-400">
+                        <span>{item.label}:</span>
+                        <span>+${item.price.toLocaleString()}</span>
+                      </div>
+                    ))}
+                    {priceBreakdown.tacomaDeduction > 0 && (
+                      <div className="flex justify-between text-emerald-400">
+                        <span>Toyota Tacoma Base Deduction:</span>
+                        <span>-${priceBreakdown.tacomaDeduction}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between items-center pt-1.5 border-t border-[#2e2e2e] font-bold text-sm text-white">
+                      <span>Estimated Installed Total:</span>
+                      <span className="text-[#FC5716]">
+                        {priceBreakdown.totalInstalled !== null
+                          ? `$${priceBreakdown.totalInstalled.toLocaleString()}`
+                          : 'Custom Cab/Chassis Quote'}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Primary AI Action & Request Quote CTAs */}
+              <div className="mt-4 flex flex-col gap-2.5">
+                <button
+                  type="button"
+                  disabled={!uploadedImage || isAiGenerating}
+                  onClick={handleGenerateAiFlatbed}
+                  className={`w-full py-3.5 px-4 rounded-xl font-heading font-bold text-base tracking-wide transition flex items-center justify-center gap-2 cursor-pointer ${
+                    aiGeneratedImage
+                      ? 'bg-[#222222] hover:bg-[#2c2c2c] text-white border border-[#3a3a3a]'
+                      : 'bg-[#FC5716] hover:bg-[#ff682b] text-black shadow-lg shadow-[#FC5716]/25'
+                  }`}
+                >
+                  {aiGeneratedImage ? (
+                    <>
+                      <RotateCcw className="w-4 h-4 text-[#FC5716]" />
+                      <span>Re-Run AI With Updated Options</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4 fill-black" />
+                      <span>
+                        {isAiGenerating
+                          ? 'AI Generating Your Flatbed...'
+                          : 'Generate AI Flatbed Preview'}
+                      </span>
+                    </>
+                  )}
+                </button>
+
+                {/* Request a Quote Button (Prominent once AI image is complete, also available anytime) */}
+                <button
+                  type="button"
+                  onClick={handleOpenQuoteRequest}
+                  className={`w-full py-3.5 px-4 rounded-xl font-heading font-bold text-base tracking-wide transition flex items-center justify-center gap-2 cursor-pointer ${
+                    aiGeneratedImage
+                      ? 'bg-[#FC5716] hover:bg-[#ff682b] text-black shadow-lg shadow-[#FC5716]/30 ring-2 ring-[#FC5716]/40'
+                      : 'bg-[#1a1a1a] hover:bg-[#242424] text-gray-200 border border-[#333333]'
+                  }`}
+                >
+                  <FileText className="w-4 h-4" />
+                  <span>Request a Quote for This Setup</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+
+                {aiGeneratedImage && (
+                  <a
+                    href={aiGeneratedImage}
+                    download={`carolina-flatbeds-${truckYear}-${bedStyle}-${deckType}.jpg`}
+                    className="w-full py-2 px-3 rounded-lg bg-[#161616] hover:bg-[#202020] border border-[#2c2c2c] text-xs font-semibold text-gray-300 flex items-center justify-center gap-1.5 transition"
+                  >
+                    <Download className="w-3.5 h-3.5 text-[#FC5716]" />
+                    <span>Download AI Preview Image</span>
+                  </a>
+                )}
+              </div>
+            </section>
+
+            {/* ========================================================= */}
+            {/* INLINE QUOTE REQUEST CARD (OPENS RIGHT BELOW PREVIEW)     */}
+            {/* ========================================================= */}
+            {(isQuoteFormOpen || aiGeneratedImage) && (
+              <section
+                ref={quoteSectionRef}
+                className="bg-[#141312] border-2 border-[#FC5716]/60 rounded-xl p-4 sm:p-5 shadow-2xl"
+              >
+                {quoteSubmitted ? (
+                  <div className="py-4 text-center space-y-3">
+                    <div className="w-12 h-12 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center mx-auto">
+                      <CheckCircle2 className="w-7 h-7" />
+                    </div>
+                    <h3 className="font-heading text-xl font-bold text-white">
+                      QUOTE REQUEST RECEIVED ({submittedRefId})
+                    </h3>
+                    <p className="text-xs sm:text-sm text-gray-300 max-w-md mx-auto leading-relaxed">
+                      Thank you, <span className="text-white font-semibold">{formData.name}</span>. We have received your{' '}
+                      <span className="text-[#FC5716] font-semibold">
+                        {truckYear} {resolvedTruckName}
+                      </span>{' '}
+                      configuration ({bedStyleLabel}, {deckTypeLabel}
+                      {allSelectedAddOnLabels.length > 0
+                        ? ` + ${allSelectedAddOnLabels.join(', ')}`
+                        : ''}
+                      ) and will follow up with your build quote shortly.
+                    </p>
+                    <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setQuoteSubmitted(false);
+                        }}
+                        className="px-4 py-2 rounded-lg bg-[#222222] hover:bg-[#2d2d2d] text-xs font-semibold text-white cursor-pointer"
+                      >
+                        Modify Options or Request Another Quote
+                      </button>
+                      <a
+                        href="tel:8436476437"
+                        className="px-4 py-2 rounded-lg bg-[#FC5716] text-black text-xs font-bold"
+                      >
+                        Call Now: 843-647-6437
+                      </a>
+                    </div>
+                  </div>
+                ) : (
+                  <form onSubmit={handleQuoteSubmit} className="space-y-3.5">
+                    <div className="border-b border-[#2a2623] pb-2.5">
+                      <h3 className="font-heading text-base sm:text-lg font-bold text-white uppercase tracking-wide">
+                        Request a Quote Based on Your Options
+                      </h3>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        Your selected truck, flatbed style, deck type, add-ons, and AI preview are attached automatically.
+                      </p>
+                    </div>
+
+                    {validationError && (
+                      <div className="p-2.5 rounded-lg bg-red-950/80 border border-red-700/60 text-xs text-red-200">
+                        {validationError}
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label
+                          htmlFor="quote-name"
+                          className="block text-[11px] font-semibold text-gray-300 uppercase mb-1"
+                        >
+                          Your Name *
+                        </label>
+                        <input
+                          id="quote-name"
+                          type="text"
+                          required
+                          placeholder="John Smith"
+                          value={formData.name}
+                          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                          className="w-full bg-[#1c1c1c] border border-[#333333] focus:border-[#FC5716] rounded-lg px-3 py-2 text-sm text-white outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label
+                          htmlFor="quote-phone"
+                          className="block text-[11px] font-semibold text-gray-300 uppercase mb-1"
+                        >
+                          Phone Number *
+                        </label>
+                        <input
+                          id="quote-phone"
+                          type="tel"
+                          required
+                          placeholder="(843) 555-0199"
+                          value={formData.phone}
+                          onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                          className="w-full bg-[#1c1c1c] border border-[#333333] focus:border-[#FC5716] rounded-lg px-3 py-2 text-sm text-white outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label
+                          htmlFor="quote-email"
+                          className="block text-[11px] font-semibold text-gray-300 uppercase mb-1"
+                        >
+                          Email Address *
+                        </label>
+                        <input
+                          id="quote-email"
+                          type="email"
+                          required
+                          placeholder="john@example.com"
+                          value={formData.email}
+                          onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                          className="w-full bg-[#1c1c1c] border border-[#333333] focus:border-[#FC5716] rounded-lg px-3 py-2 text-sm text-white outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label
+                          htmlFor="quote-cityzip"
+                          className="block text-[11px] font-semibold text-gray-300 uppercase mb-1"
+                        >
+                          City / Zip Code
+                        </label>
+                        <input
+                          id="quote-cityzip"
+                          type="text"
+                          placeholder="Charleston, SC"
+                          value={formData.cityZip}
+                          onChange={(e) => setFormData({ ...formData, cityZip: e.target.value })}
+                          className="w-full bg-[#1c1c1c] border border-[#333333] focus:border-[#FC5716] rounded-lg px-3 py-2 text-sm text-white outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label
+                        htmlFor="quote-notes"
+                        className="block text-[11px] font-semibold text-gray-300 uppercase mb-1"
+                      >
+                        Notes or Custom Fabrication Requests (Optional)
+                      </label>
+                      <textarea
+                        id="quote-notes"
+                        rows={2}
+                        placeholder="Any custom toolboxes, rack cutouts, or install timing preferences..."
+                        value={formData.notes}
+                        onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                        className="w-full bg-[#1c1c1c] border border-[#333333] focus:border-[#FC5716] rounded-lg px-3 py-2 text-sm text-white outline-none resize-none"
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      className="w-full py-3.5 px-4 rounded-xl bg-[#FC5716] hover:bg-[#ff682b] text-black font-heading font-bold text-base tracking-wide shadow-lg shadow-[#FC5716]/25 transition cursor-pointer flex items-center justify-center gap-2"
+                    >
+                      <span>Submit Quote Request</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </button>
+                  </form>
+                )}
+              </section>
             )}
           </div>
         </div>
-      )}
+      </main>
 
-      {/* Footer */}
-      <footer className="border-t border-[#1a1a1a] bg-[#0a0a0a] py-6 px-4 text-center text-xs text-gray-500 space-y-1.5">
-        <p className="font-semibold text-gray-400">
-          Carolina Flatbeds • Authorized DD Fab Custom Commercial Upfitter • Charleston, SC
-        </p>
-        <p className="text-[11px] text-gray-500">
-          Direct Shop Line: (843) 555-0192 • 3-Year Structural Workmanship Warranty • Built with American Steel
-        </p>
-        <p className="text-[10px] text-gray-600">
-          &copy; {new Date().getFullYear()} Carolina Flatbeds. All rights reserved.
-        </p>
+      {/* Simple Footer */}
+      <footer className="border-t border-[#1e1e1e] bg-[#0a0a0a] py-4 px-4 text-center text-xs text-gray-400">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
+          <span>Carolina Flatbeds | Authorized DD Fab Dealer & Upfitter - Charleston, SC</span>
+          <span>
+            Questions or Custom Builds? Call{' '}
+            <a href="tel:8436476437" className="text-[#FC5716] font-semibold hover:underline">
+              843-647-6437
+            </a>
+          </span>
+        </div>
       </footer>
     </div>
   );
