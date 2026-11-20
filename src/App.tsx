@@ -1784,36 +1784,6 @@ export default function App() {
                   )}
                 </div>
                 )}
-
-                {/* Action Bar at bottom of Step 2 */}
-                <div className="mt-5 pt-4 border-t border-[#222222] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                  <div className="text-xs text-gray-300">
-                    <span className="font-bold text-white">Selected Setup:</span>{' '}
-                    {truckYear} {resolvedTruckName} -{' '}
-                    <span className="text-[#FC5716] font-semibold">
-                      {bedStyleLabel}, {deckTypeLabel}
-                    </span>
-                    {allSelectedAddOnLabels.length > 0 && (
-                      <span> + {allSelectedAddOnLabels.length} add-on(s)</span>
-                    )}
-                  </div>
-
-                  <button
-                    type="button"
-                    disabled={!uploadedImage || isAiGenerating}
-                    onClick={handleGenerateAiFlatbed}
-                    className="px-5 py-3 rounded-xl bg-[#FC5716] hover:bg-[#ff682b] disabled:opacity-50 text-black font-heading font-bold text-sm sm:text-base tracking-wide shadow-lg shadow-[#FC5716]/25 transition flex items-center justify-center gap-2 cursor-pointer shrink-0"
-                  >
-                    <Sparkles className="w-4 h-4 fill-black" />
-                    <span>
-                      {isAiGenerating
-                        ? 'AI Generating Your Flatbed...'
-                        : aiGeneratedImage
-                        ? 'Update AI Flatbed Preview'
-                        : 'Generate AI Flatbed Preview'}
-                    </span>
-                  </button>
-                </div>
               </div>
             </section>
           </div>
@@ -2058,8 +2028,20 @@ export default function App() {
                 )}
               </div>
 
-              {/* Primary AI Action & Request Quote CTAs */}
+              {/* Primary AI Action & Request Quote CTAs (Request Quote appears once AI image is complete) */}
               <div className="mt-4 flex flex-col gap-2.5">
+                {aiGeneratedImage && (
+                  <button
+                    type="button"
+                    onClick={handleOpenQuoteRequest}
+                    className="w-full py-3.5 px-4 rounded-xl font-heading font-bold text-base tracking-wide transition flex items-center justify-center gap-2 cursor-pointer bg-[#FC5716] hover:bg-[#ff682b] text-black shadow-lg shadow-[#FC5716]/30 ring-2 ring-[#FC5716]/40"
+                  >
+                    <FileText className="w-4 h-4" />
+                    <span>Request a Quote for This Setup</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                )}
+
                 <button
                   type="button"
                   disabled={!uploadedImage || isAiGenerating}
@@ -2088,21 +2070,6 @@ export default function App() {
                       <span>Generate AI Flatbed Preview</span>
                     </>
                   )}
-                </button>
-
-                {/* Request a Quote Button (Prominent once AI image is complete, also available anytime) */}
-                <button
-                  type="button"
-                  onClick={handleOpenQuoteRequest}
-                  className={`w-full py-3.5 px-4 rounded-xl font-heading font-bold text-base tracking-wide transition flex items-center justify-center gap-2 cursor-pointer ${
-                    aiGeneratedImage
-                      ? 'bg-[#FC5716] hover:bg-[#ff682b] text-black shadow-lg shadow-[#FC5716]/30 ring-2 ring-[#FC5716]/40'
-                      : 'bg-[#1a1a1a] hover:bg-[#242424] text-gray-200 border border-[#333333]'
-                  }`}
-                >
-                  <FileText className="w-4 h-4" />
-                  <span>Request a Quote for This Setup</span>
-                  <ArrowRight className="w-4 h-4" />
                 </button>
 
                 {aiGeneratedImage && (
