@@ -499,8 +499,13 @@ export default function App() {
 
   // Toggle visual add-on selection (enforcing mutually exclusive rear fender variations per Table 1)
   const toggleAddOn = (addon: AddOnOption) => {
-    if (addon.bedRestriction === 'long-only' && bedLength !== 'long') return;
-    if (addon.bedRestriction === 'short-only' && bedLength !== 'short') return;
+    if (showPrices) {
+      if (addon.bedRestriction === 'long-only' && bedLength !== 'long') return;
+      if (addon.bedRestriction === 'short-only' && bedLength !== 'short') return;
+    } else {
+      if (addon.bedRestriction === 'long-only' && bedLength !== 'long') setBedLength('long');
+      if (addon.bedRestriction === 'short-only' && bedLength !== 'short') setBedLength('short');
+    }
 
     setSelectedAddOns((prev) => {
       if (prev.includes(addon.id)) {
@@ -1004,25 +1009,20 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-            <button
-              type="button"
-              onClick={() => setShowPrices((p) => !p)}
-              className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold border transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
-                showPrices
-                  ? 'bg-[#FC5716]/15 border-[#FC5716] text-[#FC5716]'
-                  : 'bg-[#161616] border-[#2c2c2c] text-gray-300 hover:border-gray-500'
-              }`}
-            >
-              <SlidersHorizontal className="w-3.5 h-3.5 shrink-0" />
-              <span className="sm:hidden">{showPrices ? 'Hide Prices' : 'Price Sheet'}</span>
-              <span className="hidden sm:inline">
-                {showPrices ? 'Hide Price Sheet' : 'View Price Sheet Estimate'}
-              </span>
-            </button>
+            {showPrices && (
+              <button
+                type="button"
+                onClick={() => setShowPrices(false)}
+                className="px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold border transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap bg-[#FC5716]/15 border-[#FC5716] text-[#FC5716]"
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5 shrink-0" />
+                <span>Hide Price Sheet</span>
+              </button>
+            )}
 
             <a
               href="tel:8436476437"
-              className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#161616] border border-[#2c2c2c] hover:border-[#FC5716]/50 text-xs font-semibold text-gray-200 transition whitespace-nowrap"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#161616] border border-[#2c2c2c] hover:border-[#FC5716]/50 text-xs font-semibold text-gray-200 transition whitespace-nowrap"
             >
               <Phone className="w-3.5 h-3.5 text-[#FC5716]" />
               <span>843-647-6437</span>
@@ -1148,65 +1148,67 @@ export default function App() {
                 </div>
               )}
 
-              {/* Wheel Config & Bed Length Pills (Matching Mark's PDF tables) */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 mb-5">
-                <div>
-                  <span className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">
-                    Rear Wheel Configuration
-                  </span>
-                  <div className="grid grid-cols-3 gap-1 bg-[#181818] p-1 rounded-lg border border-[#2c2c2c]">
-                    {(
-                      [
-                        { id: 'srw', label: 'SRW (Single)' },
-                        { id: 'dually', label: 'Dually (DRW)' },
-                        { id: 'cab-chassis', label: 'Cab/Chassis' }
-                      ] as { id: WheelConfig; label: string }[]
-                    ).map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        aria-pressed={wheelConfig === item.id}
-                        onClick={() => setWheelConfig(item.id)}
-                        className={`py-2 px-1 sm:px-2 rounded-md text-[11px] sm:text-xs font-semibold transition cursor-pointer text-center ${
-                          wheelConfig === item.id
-                            ? 'bg-[#FC5716] text-black font-bold shadow'
-                            : 'text-gray-300 hover:text-white hover:bg-[#222222]'
-                        }`}
-                      >
-                        {item.label}
-                      </button>
-                    ))}
+              {/* Wheel Config & Bed Length Pills (Shown only when ?prices=1 worksheet mode is active) */}
+              {showPrices && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 mb-5">
+                  <div>
+                    <span className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">
+                      Rear Wheel Configuration
+                    </span>
+                    <div className="grid grid-cols-3 gap-1 bg-[#181818] p-1 rounded-lg border border-[#2c2c2c]">
+                      {(
+                        [
+                          { id: 'srw', label: 'SRW (Single)' },
+                          { id: 'dually', label: 'Dually (DRW)' },
+                          { id: 'cab-chassis', label: 'Cab/Chassis' }
+                        ] as { id: WheelConfig; label: string }[]
+                      ).map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          aria-pressed={wheelConfig === item.id}
+                          onClick={() => setWheelConfig(item.id)}
+                          className={`py-2 px-1 sm:px-2 rounded-md text-[11px] sm:text-xs font-semibold transition cursor-pointer text-center ${
+                            wheelConfig === item.id
+                              ? 'bg-[#FC5716] text-black font-bold shadow'
+                              : 'text-gray-300 hover:text-white hover:bg-[#222222]'
+                          }`}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
 
-                <div>
-                  <span className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">
-                    Bed Length
-                  </span>
-                  <div className="grid grid-cols-2 gap-1.5 bg-[#181818] p-1 rounded-lg border border-[#2c2c2c]">
-                    {(
-                      [
-                        { id: 'short', label: 'Short Bed (SB)' },
-                        { id: 'long', label: 'Long Bed (LB)' }
-                      ] as { id: BedLength; label: string }[]
-                    ).map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        aria-pressed={bedLength === item.id}
-                        onClick={() => setBedLength(item.id)}
-                        className={`py-2 px-2 rounded-md text-[11px] sm:text-xs font-semibold transition cursor-pointer text-center ${
-                          bedLength === item.id
-                            ? 'bg-[#FC5716] text-black font-bold shadow'
-                            : 'text-gray-300 hover:text-white hover:bg-[#222222]'
-                        }`}
-                      >
-                        {item.label}
-                      </button>
-                    ))}
+                  <div>
+                    <span className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">
+                      Bed Length
+                    </span>
+                    <div className="grid grid-cols-2 gap-1.5 bg-[#181818] p-1 rounded-lg border border-[#2c2c2c]">
+                      {(
+                        [
+                          { id: 'short', label: 'Short Bed (SB)' },
+                          { id: 'long', label: 'Long Bed (LB)' }
+                        ] as { id: BedLength; label: string }[]
+                      ).map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          aria-pressed={bedLength === item.id}
+                          onClick={() => setBedLength(item.id)}
+                          className={`py-2 px-2 rounded-md text-[11px] sm:text-xs font-semibold transition cursor-pointer text-center ${
+                            bedLength === item.id
+                              ? 'bg-[#FC5716] text-black font-bold shadow'
+                              : 'text-gray-300 hover:text-white hover:bg-[#222222]'
+                          }`}
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
               {/* Photo Upload Dropzone */}
               <div>
@@ -1555,8 +1557,9 @@ export default function App() {
                   {visibleVisualAddOns.map((addon) => {
                     const isSelected = selectedAddOns.includes(addon.id);
                     const isDisabledByBed =
-                      (addon.bedRestriction === 'long-only' && bedLength !== 'long') ||
-                      (addon.bedRestriction === 'short-only' && bedLength !== 'short');
+                      showPrices &&
+                      ((addon.bedRestriction === 'long-only' && bedLength !== 'long') ||
+                        (addon.bedRestriction === 'short-only' && bedLength !== 'short'));
                     const thumbSrc =
                       bedStyle === 'full-skirted' && addon.skirtedImage
                         ? addon.skirtedImage
@@ -1658,7 +1661,8 @@ export default function App() {
                   })}
                 </div>
 
-                {/* Collapsible Accordion for Additional Factory Install & Table 2 Deduction Options */}
+                {/* Collapsible Accordion for Additional Factory Install & Table 2 Deduction Options (Shown when ?prices=1 worksheet mode is active) */}
+                {showPrices && (
                 <div className="mt-4 border border-[#282828] rounded-xl bg-[#161616] overflow-hidden">
                   <button
                     type="button"
@@ -1779,12 +1783,13 @@ export default function App() {
                     </div>
                   )}
                 </div>
+                )}
 
                 {/* Action Bar at bottom of Step 2 */}
                 <div className="mt-5 pt-4 border-t border-[#222222] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <div className="text-xs text-gray-300">
                     <span className="font-bold text-white">Selected Setup:</span>{' '}
-                    {truckYear} {resolvedTruckName} ({wheelConfigLabel} / {bedLengthLabel}) -{' '}
+                    {truckYear} {resolvedTruckName} -{' '}
                     <span className="text-[#FC5716] font-semibold">
                       {bedStyleLabel}, {deckTypeLabel}
                     </span>
@@ -1981,9 +1986,11 @@ export default function App() {
                   <span className="px-2.5 py-1 rounded-md bg-[#222222] text-xs font-semibold text-white">
                     {truckYear} {resolvedTruckName}
                   </span>
-                  <span className="px-2.5 py-1 rounded-md bg-[#222222] text-xs font-semibold text-gray-200">
-                    {wheelConfigLabel} · {bedLengthLabel}
-                  </span>
+                  {showPrices && (
+                    <span className="px-2.5 py-1 rounded-md bg-[#222222] text-xs font-semibold text-gray-200">
+                      {wheelConfigLabel} · {bedLengthLabel}
+                    </span>
+                  )}
                   <span className="px-2.5 py-1 rounded-md bg-[#FC5716]/20 border border-[#FC5716]/40 text-xs font-bold text-[#FC5716]">
                     {bedStyleLabel}
                   </span>
