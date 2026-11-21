@@ -351,8 +351,19 @@ export default function App() {
   });
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const step1Ref = useRef<HTMLElement>(null);
+  const step2Ref = useRef<HTMLElement>(null);
   const previewCardRef = useRef<HTMLDivElement>(null);
   const quoteSectionRef = useRef<HTMLDivElement>(null);
+
+  const scrollToSection = (el: HTMLElement | null) => {
+    if (typeof window !== 'undefined' && el) {
+      requestAnimationFrame(() => {
+        const rect = el.getBoundingClientRect();
+        window.scrollTo({ top: Math.max(0, window.scrollY + rect.top - 80), behavior: 'smooth' });
+      });
+    }
+  };
 
   // Computed labels
   const resolvedTruckName =
@@ -730,7 +741,7 @@ export default function App() {
     if (typeof window !== 'undefined' && previewCardRef.current) {
       requestAnimationFrame(() => {
         const rect = previewCardRef.current?.getBoundingClientRect();
-        if (rect && (window.innerWidth < 1024 || rect.top < 70)) {
+        if (rect && (rect.top < 70 || rect.top > 160)) {
           window.scrollTo({ top: Math.max(0, window.scrollY + rect.top - 80), behavior: 'smooth' });
         }
       });
@@ -999,7 +1010,7 @@ export default function App() {
     <div className="min-h-screen bg-[#090909] text-gray-100 flex flex-col overflow-x-hidden w-full selection:bg-[#FC5716] selection:text-white">
       {/* Clean Brand Header (zero truncation across 320px - 1920px) */}
       <header className="border-b border-[#222222] bg-[#0d0d0d]/95 backdrop-blur sticky top-0 z-40 w-full">
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2 sm:gap-3">
+        <div className="max-w-5xl mx-auto px-3 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2 sm:gap-3">
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <div className="w-8 h-8 sm:w-10 sm:h-10 shrink-0 rounded-lg bg-[#FC5716] flex items-center justify-center font-heading font-bold text-black text-sm sm:text-xl tracking-wider shadow-md shadow-[#FC5716]/20">
               CF
@@ -1040,8 +1051,8 @@ export default function App() {
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-5 sm:py-7">
+      {/* Main Content: Top-to-Bottom Linear Flow (Step 1 -> Step 2 -> Step 3) */}
+      <main className="flex-1 max-w-5xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-5 sm:py-7">
         {/* Intro Banner: Simple 3-Step Flow */}
         <div className="mb-6 bg-gradient-to-r from-[#141210] via-[#171412] to-[#121212] border border-[#2a241f] rounded-xl p-4 sm:p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
@@ -1053,185 +1064,238 @@ export default function App() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2 text-[11px] sm:text-xs font-semibold shrink-0">
-            <span className="px-2.5 py-1 rounded-full bg-[#FC5716]/20 text-[#FC5716] border border-[#FC5716]/40">
+            <button
+              type="button"
+              onClick={() => scrollToSection(step1Ref.current)}
+              className="px-2.5 py-1 rounded-full bg-[#FC5716]/20 text-[#FC5716] border border-[#FC5716]/40 hover:bg-[#FC5716]/30 transition cursor-pointer"
+            >
               1. Your Truck & Photo
-            </span>
+            </button>
             <span className="text-gray-600">-&gt;</span>
-            <span className="px-2.5 py-1 rounded-full bg-[#1e1e1e] text-gray-200 border border-[#333333]">
+            <button
+              type="button"
+              onClick={() => scrollToSection(step2Ref.current)}
+              className="px-2.5 py-1 rounded-full bg-[#1e1e1e] text-gray-200 border border-[#333333] hover:border-[#FC5716]/50 transition cursor-pointer"
+            >
               2. Pick Options
-            </span>
+            </button>
             <span className="text-gray-600">-&gt;</span>
-            <span className="px-2.5 py-1 rounded-full bg-[#1e1e1e] text-gray-200 border border-[#333333]">
+            <button
+              type="button"
+              onClick={() => scrollToSection(previewCardRef.current)}
+              className="px-2.5 py-1 rounded-full bg-[#1e1e1e] text-gray-200 border border-[#333333] hover:border-[#FC5716]/50 transition cursor-pointer"
+            >
               3. AI Render & Quote
-            </span>
+            </button>
           </div>
         </div>
 
-        {/* Two-Column Layout: Left = Step 1 & Step 2 Options | Right = Step 3 Sticky AI Preview & Quote */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
-          {/* LEFT COLUMN (7 Cols on Desktop): STEP 1 & STEP 2 */}
-          <div className="lg:col-span-7 flex flex-col space-y-6">
-            {/* ========================================================= */}
-            {/* STEP 1: YOUR TRUCK & PHOTO                                */}
-            {/* ========================================================= */}
-            <section className="bg-[#121212] border border-[#262626] rounded-xl p-4 sm:p-6 shadow-xl">
-              <div className="flex items-center justify-between gap-2 pb-4 mb-4 border-b border-[#222222]">
-                <div className="flex items-center gap-2.5">
-                  <span className="w-7 h-7 rounded-full bg-[#FC5716] text-black font-heading font-bold text-sm flex items-center justify-center shrink-0">
-                    1
-                  </span>
-                  <div>
-                    <h2 className="font-heading text-base sm:text-lg font-bold text-white tracking-wide uppercase">
-                      Step 1: Your Truck & Photo
-                    </h2>
-                    <p className="text-xs text-gray-400">
-                      Select your pickup model, year, and upload a photo (or try a sample truck)
-                    </p>
-                  </div>
-                </div>
-                <Truck className="w-5 h-5 text-[#FC5716] shrink-0 hidden sm:block" />
-              </div>
-
-              {/* Truck Make/Model & Year Dropdowns */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 mb-4">
-                <div className="sm:col-span-2">
-                  <label
-                    htmlFor="truck-make-model"
-                    className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5"
-                  >
-                    Truck Make & Model
-                  </label>
-                  <select
-                    id="truck-make-model"
-                    value={truckMakeModel}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setTruckMakeModel(val);
-                      if (activeSampleId !== null) {
-                        const matchedSample = SAMPLE_TRUCKS.find((s) => s.makeModel === val);
-                        if (matchedSample) {
-                          setActiveSampleId(matchedSample.id);
-                          setUploadedImage(matchedSample.beforeImage);
-                          setBedLength(matchedSample.bedLength);
-                        }
-                      }
-                    }}
-                    className="w-full bg-[#1a1a1a] border border-[#333333] focus:border-[#FC5716] rounded-lg px-3.5 py-2.5 text-sm text-white font-medium outline-none transition"
-                  >
-                    {TRUCK_MAKE_MODELS.map((item) => (
-                      <option key={item} value={item}>
-                        {item}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
+        {/* Single-Column Top-to-Bottom Progression: Step 1 -> Step 2 -> Step 3 */}
+        <div className="flex flex-col space-y-6">
+          {/* ========================================================= */}
+          {/* STEP 1: YOUR TRUCK & PHOTO (TOP)                          */}
+          {/* ========================================================= */}
+          <section
+            ref={step1Ref}
+            className="bg-[#121212] border border-[#262626] rounded-xl p-4 sm:p-6 shadow-xl"
+          >
+            <div className="flex items-center justify-between gap-2 pb-4 mb-5 border-b border-[#222222]">
+              <div className="flex items-center gap-2.5">
+                <span className="w-7 h-7 rounded-full bg-[#FC5716] text-black font-heading font-bold text-sm flex items-center justify-center shrink-0">
+                  1
+                </span>
                 <div>
-                  <label
-                    htmlFor="truck-year"
-                    className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5"
-                  >
-                    Truck Year
-                  </label>
-                  <select
-                    id="truck-year"
-                    value={truckYear}
-                    onChange={(e) => setTruckYear(e.target.value)}
-                    className="w-full bg-[#1a1a1a] border border-[#333333] focus:border-[#FC5716] rounded-lg px-3.5 py-2.5 text-sm text-white font-medium outline-none transition"
-                  >
-                    {TRUCK_YEARS.map((yr) => (
-                      <option key={yr} value={yr}>
-                        {yr}
-                      </option>
-                    ))}
-                  </select>
+                  <h2 className="font-heading text-base sm:text-lg font-bold text-white tracking-wide uppercase">
+                    Step 1: Your Truck & Photo
+                  </h2>
+                  <p className="text-xs text-gray-400">
+                    Select your pickup model, year, and upload a photo (or try a sample truck)
+                  </p>
+                </div>
+              </div>
+              <Truck className="w-5 h-5 text-[#FC5716] shrink-0 hidden sm:block" />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-stretch">
+              {/* Left 7 Cols inside Step 1: Truck Make/Model, Year & Sample Truck Quick-Picks */}
+              <div className="md:col-span-7 flex flex-col justify-between space-y-4">
+                <div>
+                  {/* Truck Make/Model & Year Dropdowns */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                    <div className="sm:col-span-2">
+                      <label
+                        htmlFor="truck-make-model"
+                        className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5"
+                      >
+                        Truck Make & Model
+                      </label>
+                      <select
+                        id="truck-make-model"
+                        value={truckMakeModel}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setTruckMakeModel(val);
+                          if (activeSampleId !== null) {
+                            const matchedSample = SAMPLE_TRUCKS.find((s) => s.makeModel === val);
+                            if (matchedSample) {
+                              setActiveSampleId(matchedSample.id);
+                              setUploadedImage(matchedSample.beforeImage);
+                              setBedLength(matchedSample.bedLength);
+                            }
+                          }
+                        }}
+                        className="w-full bg-[#1a1a1a] border border-[#333333] focus:border-[#FC5716] rounded-lg px-3.5 py-2.5 text-sm text-white font-medium outline-none transition"
+                      >
+                        {TRUCK_MAKE_MODELS.map((item) => (
+                          <option key={item} value={item}>
+                            {item}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label
+                        htmlFor="truck-year"
+                        className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5"
+                      >
+                        Truck Year
+                      </label>
+                      <select
+                        id="truck-year"
+                        value={truckYear}
+                        onChange={(e) => setTruckYear(e.target.value)}
+                        className="w-full bg-[#1a1a1a] border border-[#333333] focus:border-[#FC5716] rounded-lg px-3.5 py-2.5 text-sm text-white font-medium outline-none transition"
+                      >
+                        {TRUCK_YEARS.map((yr) => (
+                          <option key={yr} value={yr}>
+                            {yr}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {truckMakeModel === 'Other / Custom Model' && (
+                    <div className="mt-3.5">
+                      <label
+                        htmlFor="custom-truck-input"
+                        className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5"
+                      >
+                        Enter Your Truck Make & Model
+                      </label>
+                      <input
+                        id="custom-truck-input"
+                        type="text"
+                        maxLength={80}
+                        placeholder="e.g. 2018 Nissan Titan XD or Ford F-450"
+                        value={customMakeModel}
+                        onChange={(e) => setCustomMakeModel(e.target.value)}
+                        className="w-full bg-[#1a1a1a] border border-[#333333] focus:border-[#FC5716] rounded-lg px-3.5 py-2.5 text-sm text-white outline-none"
+                      />
+                    </div>
+                  )}
+
+                  {/* Wheel Config & Bed Length Pills (Shown only when ?prices=1 worksheet mode is active) */}
+                  {showPrices && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 mt-4">
+                      <div>
+                        <span className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">
+                          Rear Wheel Configuration
+                        </span>
+                        <div className="grid grid-cols-3 gap-1 bg-[#181818] p-1 rounded-lg border border-[#2c2c2c]">
+                          {(
+                            [
+                              { id: 'srw', label: 'SRW (Single)' },
+                              { id: 'dually', label: 'Dually (DRW)' },
+                              { id: 'cab-chassis', label: 'Cab/Chassis' }
+                            ] as { id: WheelConfig; label: string }[]
+                          ).map((item) => (
+                            <button
+                              key={item.id}
+                              type="button"
+                              aria-pressed={wheelConfig === item.id}
+                              onClick={() => setWheelConfig(item.id)}
+                              className={`py-2 px-1 sm:px-2 rounded-md text-[11px] sm:text-xs font-semibold transition cursor-pointer text-center ${
+                                wheelConfig === item.id
+                                  ? 'bg-[#FC5716] text-black font-bold shadow'
+                                  : 'text-gray-300 hover:text-white hover:bg-[#222222]'
+                              }`}
+                            >
+                              {item.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <span className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">
+                          Bed Length
+                        </span>
+                        <div className="grid grid-cols-2 gap-1.5 bg-[#181818] p-1 rounded-lg border border-[#2c2c2c]">
+                          {(
+                            [
+                              { id: 'short', label: 'Short Bed (SB)' },
+                              { id: 'long', label: 'Long Bed (LB)' }
+                            ] as { id: BedLength; label: string }[]
+                          ).map((item) => (
+                            <button
+                              key={item.id}
+                              type="button"
+                              aria-pressed={bedLength === item.id}
+                              onClick={() => setBedLength(item.id)}
+                              className={`py-2 px-2 rounded-md text-[11px] sm:text-xs font-semibold transition cursor-pointer text-center ${
+                                bedLength === item.id
+                                  ? 'bg-[#FC5716] text-black font-bold shadow'
+                                  : 'text-gray-300 hover:text-white hover:bg-[#222222]'
+                              }`}
+                            >
+                              {item.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 4 One-Click Sample Trucks */}
+                <div className="pt-2 border-t border-[#222222]">
+                  <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">
+                    No photo handy? Try a sample truck with 1 click:
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {SAMPLE_TRUCKS.map((sample) => {
+                      const isSelected = activeSampleId === sample.id;
+                      return (
+                        <button
+                          key={sample.id}
+                          type="button"
+                          aria-pressed={isSelected}
+                          onClick={() => handleSelectSampleTruck(sample)}
+                          className={`group flex items-center gap-2.5 p-2 rounded-lg border text-left transition cursor-pointer ${
+                            isSelected
+                              ? 'border-[#FC5716] bg-[#FC5716]/15 text-white'
+                              : 'border-[#2a2a2a] bg-[#181818] text-gray-300 hover:border-gray-500'
+                          }`}
+                        >
+                          <img
+                            src={sample.beforeImage}
+                            alt={sample.label}
+                            className="w-12 h-9 rounded object-cover shrink-0 border border-[#333333]"
+                          />
+                          <span className="text-xs font-semibold leading-tight line-clamp-2">
+                            {sample.shortLabel}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
 
-              {truckMakeModel === 'Other / Custom Model' && (
-                <div className="mb-4">
-                  <label
-                    htmlFor="custom-truck-input"
-                    className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5"
-                  >
-                    Enter Your Truck Make & Model
-                  </label>
-                  <input
-                    id="custom-truck-input"
-                    type="text"
-                    maxLength={80}
-                    placeholder="e.g. 2018 Nissan Titan XD or Ford F-450"
-                    value={customMakeModel}
-                    onChange={(e) => setCustomMakeModel(e.target.value)}
-                    className="w-full bg-[#1a1a1a] border border-[#333333] focus:border-[#FC5716] rounded-lg px-3.5 py-2.5 text-sm text-white outline-none"
-                  />
-                </div>
-              )}
-
-              {/* Wheel Config & Bed Length Pills (Shown only when ?prices=1 worksheet mode is active) */}
-              {showPrices && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 mb-5">
-                  <div>
-                    <span className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">
-                      Rear Wheel Configuration
-                    </span>
-                    <div className="grid grid-cols-3 gap-1 bg-[#181818] p-1 rounded-lg border border-[#2c2c2c]">
-                      {(
-                        [
-                          { id: 'srw', label: 'SRW (Single)' },
-                          { id: 'dually', label: 'Dually (DRW)' },
-                          { id: 'cab-chassis', label: 'Cab/Chassis' }
-                        ] as { id: WheelConfig; label: string }[]
-                      ).map((item) => (
-                        <button
-                          key={item.id}
-                          type="button"
-                          aria-pressed={wheelConfig === item.id}
-                          onClick={() => setWheelConfig(item.id)}
-                          className={`py-2 px-1 sm:px-2 rounded-md text-[11px] sm:text-xs font-semibold transition cursor-pointer text-center ${
-                            wheelConfig === item.id
-                              ? 'bg-[#FC5716] text-black font-bold shadow'
-                              : 'text-gray-300 hover:text-white hover:bg-[#222222]'
-                          }`}
-                        >
-                          {item.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <span className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">
-                      Bed Length
-                    </span>
-                    <div className="grid grid-cols-2 gap-1.5 bg-[#181818] p-1 rounded-lg border border-[#2c2c2c]">
-                      {(
-                        [
-                          { id: 'short', label: 'Short Bed (SB)' },
-                          { id: 'long', label: 'Long Bed (LB)' }
-                        ] as { id: BedLength; label: string }[]
-                      ).map((item) => (
-                        <button
-                          key={item.id}
-                          type="button"
-                          aria-pressed={bedLength === item.id}
-                          onClick={() => setBedLength(item.id)}
-                          className={`py-2 px-2 rounded-md text-[11px] sm:text-xs font-semibold transition cursor-pointer text-center ${
-                            bedLength === item.id
-                              ? 'bg-[#FC5716] text-black font-bold shadow'
-                              : 'text-gray-300 hover:text-white hover:bg-[#222222]'
-                          }`}
-                        >
-                          {item.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Photo Upload Dropzone */}
-              <div>
+              {/* Right 5 Cols inside Step 1: Your Truck Photo Preview & Upload Dropzone */}
+              <div className="md:col-span-5 flex flex-col">
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="text-xs font-semibold text-gray-300 uppercase tracking-wider">
                     Your Truck Photo
@@ -1260,7 +1324,7 @@ export default function App() {
                   onDragLeave={() => setIsDraggingOver(false)}
                   onDrop={handleDrop}
                   onClick={() => fileInputRef.current?.click()}
-                  className={`border-2 border-dashed rounded-xl p-4 sm:p-5 text-center transition cursor-pointer ${
+                  className={`flex-1 border-2 border-dashed rounded-xl p-3.5 flex flex-col justify-between transition cursor-pointer ${
                     isDraggingOver
                       ? 'border-[#FC5716] bg-[#FC5716]/10'
                       : 'border-[#333333] hover:border-[#FC5716]/70 bg-[#171717]/80 hover:bg-[#1b1b1b]'
@@ -1273,27 +1337,39 @@ export default function App() {
                     onChange={handleFileUpload}
                     className="hidden"
                   />
-                  <div className="flex flex-col sm:flex-row items-center justify-center gap-3.5">
-                    {uploadedImage && (
+
+                  {uploadedImage ? (
+                    <div className="relative aspect-[16/10] w-full rounded-lg overflow-hidden border border-[#2e2e2e] bg-[#0a0a0a] mb-3">
                       <img
                         src={uploadedImage}
                         alt="Selected pickup truck"
-                        className="w-24 h-16 object-cover rounded-lg border border-[#333333] shrink-0"
+                        className="w-full h-full object-cover"
                       />
-                    )}
-                    <div className="text-center sm:text-left">
-                      <div className="inline-flex items-center gap-2 text-sm font-bold text-white">
-                        <Camera className="w-4 h-4 text-[#FC5716]" />
-                        <span>
-                          {uploadedImage
-                            ? 'Upload Your Own Truck Photo Instead'
-                            : 'Click or Drag & Drop Your Truck Photo Here'}
-                        </span>
-                      </div>
-                      <p className="text-xs text-gray-400 mt-0.5">
-                        Side or rear three-quarter angle works best (JPG, PNG, or WebP up to 10MB)
-                      </p>
+                      <span className="absolute bottom-2 left-2 px-2 py-0.5 rounded bg-black/80 text-[10px] font-semibold text-gray-200 border border-white/15">
+                        {truckYear} {resolvedTruckName}
+                      </span>
                     </div>
+                  ) : (
+                    <div className="aspect-[16/10] w-full rounded-lg border border-[#2a2a2a] bg-[#111111] flex flex-col items-center justify-center mb-3 p-4">
+                      <ImageIcon className="w-8 h-8 text-gray-500 mb-1.5" />
+                      <span className="text-xs text-gray-400 font-medium">
+                        No truck photo selected
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="text-center">
+                    <div className="inline-flex items-center justify-center gap-1.5 text-xs sm:text-sm font-bold text-white">
+                      <Camera className="w-4 h-4 text-[#FC5716] shrink-0" />
+                      <span>
+                        {uploadedImage
+                          ? 'Upload Your Own Truck Photo Instead'
+                          : 'Click or Drag & Drop Your Truck Photo Here'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-gray-400 mt-0.5">
+                      Side or rear three-quarter angle works best (JPG, PNG, or WebP up to 10MB)
+                    </p>
                   </div>
                 </div>
 
@@ -1302,62 +1378,32 @@ export default function App() {
                     {uploadError}
                   </p>
                 )}
+              </div>
+            </div>
+          </section>
 
-                {/* 4 One-Click Sample Trucks */}
-                <div className="mt-3.5">
-                  <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">
-                    No photo handy? Try a sample truck with 1 click:
-                  </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                    {SAMPLE_TRUCKS.map((sample) => {
-                      const isSelected = activeSampleId === sample.id;
-                      return (
-                        <button
-                          key={sample.id}
-                          type="button"
-                          aria-pressed={isSelected}
-                          onClick={() => handleSelectSampleTruck(sample)}
-                          className={`group flex items-center gap-2 p-1.5 rounded-lg border text-left transition cursor-pointer ${
-                            isSelected
-                              ? 'border-[#FC5716] bg-[#FC5716]/15 text-white'
-                              : 'border-[#2a2a2a] bg-[#181818] text-gray-300 hover:border-gray-500'
-                          }`}
-                        >
-                          <img
-                            src={sample.beforeImage}
-                            alt={sample.label}
-                            className="w-10 h-8 rounded object-cover shrink-0 border border-[#333333]"
-                          />
-                          <span className="text-[11px] font-semibold leading-tight line-clamp-2">
-                            {sample.shortLabel}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
+          {/* ========================================================= */}
+          {/* STEP 2: PICK YOUR FLATBED OPTIONS (MIDDLE)                */}
+          {/* ========================================================= */}
+          <section
+            ref={step2Ref}
+            className="bg-[#121212] border border-[#262626] rounded-xl p-4 sm:p-6 shadow-xl"
+          >
+            <div className="flex items-center justify-between gap-2 pb-4 mb-5 border-b border-[#222222]">
+              <div className="flex items-center gap-2.5">
+                <span className="w-7 h-7 rounded-full bg-[#FC5716] text-black font-heading font-bold text-sm flex items-center justify-center shrink-0">
+                  2
+                </span>
+                <div>
+                  <h2 className="font-heading text-base sm:text-lg font-bold text-white tracking-wide uppercase">
+                    Step 2: Pick Your Flatbed Options
+                  </h2>
+                  <p className="text-xs text-gray-400">
+                    Choose skirted or non-skirted, deck material, and authentic DD Fab add-ons
+                  </p>
                 </div>
               </div>
-            </section>
-
-            {/* ========================================================= */}
-            {/* STEP 2: PICK YOUR FLATBED OPTIONS (1:1 WITH MARK'S PDFS)  */}
-            {/* ========================================================= */}
-            <section className="bg-[#121212] border border-[#262626] rounded-xl p-4 sm:p-6 shadow-xl">
-              <div className="flex items-center justify-between gap-2 pb-4 mb-5 border-b border-[#222222]">
-                <div className="flex items-center gap-2.5">
-                  <span className="w-7 h-7 rounded-full bg-[#FC5716] text-black font-heading font-bold text-sm flex items-center justify-center shrink-0">
-                    2
-                  </span>
-                  <div>
-                    <h2 className="font-heading text-base sm:text-lg font-bold text-white tracking-wide uppercase">
-                      Step 2: Pick Your Flatbed Options
-                    </h2>
-                    <p className="text-xs text-gray-400">
-                      Choose skirted or non-skirted, deck material, and authentic DD Fab add-ons
-                    </p>
-                  </div>
-                </div>
-              </div>
+            </div>
 
               {/* 2A. FLATBED MODEL: STANDARD (NON-SKIRTED) VS FULL SKIRTED */}
               <div className="mb-6">
@@ -1805,18 +1851,14 @@ export default function App() {
                 </div>
                 )}
               </div>
-            </section>
-          </div>
+          </section>
 
           {/* ========================================================= */}
-          {/* RIGHT COLUMN (5 Cols on Desktop): STEP 3 AI MAGIC & QUOTE */}
+          {/* STEP 3: AI FLATBED PREVIEW & QUOTE (BOTTOM)               */}
           {/* ========================================================= */}
-          <div
-            ref={previewCardRef}
-            className={`lg:col-span-5 ${isQuoteFormOpen ? '' : 'lg:sticky lg:top-20'} flex flex-col space-y-5`}
-          >
-            <section className="bg-[#121212] border border-[#262626] rounded-xl p-4 sm:p-5 shadow-2xl">
-              <div className="flex items-center justify-between gap-2 pb-3.5 mb-3.5 border-b border-[#222222]">
+          <div ref={previewCardRef} className="flex flex-col space-y-5">
+            <section className="bg-[#121212] border border-[#262626] rounded-xl p-4 sm:p-6 shadow-2xl">
+              <div className="flex items-center justify-between gap-2 pb-4 mb-5 border-b border-[#222222]">
                 <div className="flex items-center gap-2.5">
                   <span className="w-7 h-7 rounded-full bg-[#FC5716] text-black font-heading font-bold text-sm flex items-center justify-center shrink-0">
                     3
@@ -1832,280 +1874,288 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Before / After / Side-by-Side Toggle Bar (when AI render is complete) */}
-              {aiGeneratedImage && !isAiGenerating && (
-                <div className="flex items-center justify-between gap-2 mb-3 bg-[#181818] p-1 rounded-lg border border-[#2c2c2c]">
-                  {(
-                    [
-                      { id: 'after', label: 'After (AI Flatbed)' },
-                      { id: 'before', label: 'Before (Original)' },
-                      { id: 'split', label: 'Side-by-Side' }
-                    ] as { id: 'after' | 'before' | 'split'; label: string }[]
-                  ).map((mode) => (
-                    <button
-                      key={mode.id}
-                      type="button"
-                      aria-pressed={previewViewMode === mode.id}
-                      onClick={() => setPreviewViewMode(mode.id)}
-                      className={`flex-1 py-1.5 px-2 rounded-md text-xs font-semibold transition cursor-pointer text-center ${
-                        previewViewMode === mode.id
-                          ? 'bg-[#261c17] text-[#FC5716] border border-[#FC5716]/60 font-bold shadow'
-                          : 'text-gray-300 hover:text-white border border-transparent'
-                      }`}
-                    >
-                      {mode.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {/* Live AI Render Viewport */}
-              <div className="relative rounded-xl overflow-hidden border border-[#2e2e2e] bg-[#0a0a0a] aspect-[16/10] flex items-center justify-center">
-                {!uploadedImage ? (
-                  <div className="p-6 text-center">
-                    <ImageIcon className="w-10 h-10 text-gray-600 mx-auto mb-2" />
-                    <p className="text-sm font-semibold text-gray-300">
-                      Upload a photo or select a sample truck in Step 1
-                    </p>
-                    <p className="text-xs text-gray-500 mt-1">
-                      Your truck preview will appear right here
-                    </p>
-                  </div>
-                ) : isAiGenerating ? (
-                  <div className="relative w-full h-full" aria-live="polite">
-                    <img
-                      src={uploadedImage}
-                      alt="Generating flatbed preview"
-                      className="w-full h-full object-cover opacity-35 blur-[2px]"
-                    />
-                    <div className="absolute inset-0 bg-black/65 flex flex-col items-center justify-center p-5 text-center">
-                      <div className="w-11 h-11 rounded-full border-3 border-[#FC5716] border-t-transparent animate-spin mb-3" />
-                      <div className="font-heading font-bold text-base text-white tracking-wide">
-                        AI UPFITTING YOUR TRUCK...
-                      </div>
-                      <p className="text-xs text-[#FC5716] font-medium mt-1 max-w-xs">
-                        {aiStepText}
-                      </p>
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                {/* Left 7 Cols inside Step 3: Large AI Render Viewport & View Mode Toggles */}
+                <div className="lg:col-span-7 flex flex-col">
+                  {/* Before / After / Side-by-Side Toggle Bar (when AI render is complete) */}
+                  {aiGeneratedImage && !isAiGenerating && (
+                    <div className="flex items-center justify-between gap-2 mb-3 bg-[#181818] p-1 rounded-lg border border-[#2c2c2c]">
+                      {(
+                        [
+                          { id: 'after', label: 'After (AI Flatbed)' },
+                          { id: 'before', label: 'Before (Original)' },
+                          { id: 'split', label: 'Side-by-Side' }
+                        ] as { id: 'after' | 'before' | 'split'; label: string }[]
+                      ).map((mode) => (
+                        <button
+                          key={mode.id}
+                          type="button"
+                          aria-pressed={previewViewMode === mode.id}
+                          onClick={() => setPreviewViewMode(mode.id)}
+                          className={`flex-1 py-1.5 px-2 rounded-md text-xs font-semibold transition cursor-pointer text-center ${
+                            previewViewMode === mode.id
+                              ? 'bg-[#261c17] text-[#FC5716] border border-[#FC5716]/60 font-bold shadow'
+                              : 'text-gray-300 hover:text-white border border-transparent'
+                          }`}
+                        >
+                          {mode.label}
+                        </button>
+                      ))}
                     </div>
-                  </div>
-                ) : aiGeneratedImage ? (
-                  previewViewMode === 'split' ? (
-                    <div className="grid grid-cols-2 gap-1 w-full h-full bg-[#1a1a1a]">
-                      <div className="relative w-full h-full overflow-hidden">
+                  )}
+
+                  {/* Live AI Render Viewport */}
+                  <div className="relative rounded-xl overflow-hidden border border-[#2e2e2e] bg-[#0a0a0a] aspect-[16/10] flex items-center justify-center">
+                    {!uploadedImage ? (
+                      <div className="p-6 text-center">
+                        <ImageIcon className="w-10 h-10 text-gray-600 mx-auto mb-2" />
+                        <p className="text-sm font-semibold text-gray-300">
+                          Upload a photo or select a sample truck in Step 1
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          Your truck preview will appear right here
+                        </p>
+                      </div>
+                    ) : isAiGenerating ? (
+                      <div className="relative w-full h-full" aria-live="polite">
                         <img
                           src={uploadedImage}
-                          alt="Original pickup truck"
-                          className="w-full h-full object-cover"
+                          alt="Generating flatbed preview"
+                          className="w-full h-full object-cover opacity-35 blur-[2px]"
                         />
-                        <span className="absolute bottom-2 left-2 px-2 py-0.5 rounded bg-black/80 text-[10px] font-bold text-gray-200 border border-white/15">
-                          BEFORE
-                        </span>
+                        <div className="absolute inset-0 bg-black/65 flex flex-col items-center justify-center p-5 text-center">
+                          <div className="w-11 h-11 rounded-full border-3 border-[#FC5716] border-t-transparent animate-spin mb-3" />
+                          <div className="font-heading font-bold text-base text-white tracking-wide">
+                            AI UPFITTING YOUR TRUCK...
+                          </div>
+                          <p className="text-xs text-[#FC5716] font-medium mt-1 max-w-xs">
+                            {aiStepText}
+                          </p>
+                        </div>
                       </div>
-                      <div className="relative w-full h-full overflow-hidden">
+                    ) : aiGeneratedImage ? (
+                      previewViewMode === 'split' ? (
+                        <div className="grid grid-cols-2 gap-1 w-full h-full bg-[#1a1a1a]">
+                          <div className="relative w-full h-full overflow-hidden">
+                            <img
+                              src={uploadedImage}
+                              alt="Original pickup truck"
+                              className="w-full h-full object-cover"
+                            />
+                            <span className="absolute bottom-2 left-2 px-2 py-0.5 rounded bg-black/80 text-[10px] font-bold text-gray-200 border border-white/15">
+                              BEFORE
+                            </span>
+                          </div>
+                          <div className="relative w-full h-full overflow-hidden">
+                            <img
+                              src={aiGeneratedImage}
+                              alt="AI generated DD Fab flatbed"
+                              className="w-full h-full object-cover"
+                            />
+                            <span className="absolute bottom-2 left-2 px-2 py-0.5 rounded bg-[#FC5716] text-[10px] font-bold text-black">
+                              AFTER (DD FAB)
+                            </span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="relative w-full h-full">
+                          <img
+                            src={previewViewMode === 'before' ? uploadedImage : aiGeneratedImage}
+                            alt={
+                              previewViewMode === 'before'
+                                ? 'Original truck photo'
+                                : 'AI rendered DD Fab flatbed'
+                            }
+                            className="w-full h-full object-cover"
+                          />
+                          <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-md bg-black/80 backdrop-blur-sm border border-white/15 text-[11px] font-bold text-white flex items-center gap-1.5">
+                            <span
+                              className={`w-2 h-2 rounded-full ${
+                                previewViewMode === 'before' ? 'bg-gray-400' : 'bg-[#FC5716]'
+                              }`}
+                            />
+                            <span>
+                              {previewViewMode === 'before'
+                                ? 'Original Truck Photo'
+                                : `AI Render: ${renderedSummaryLabel || `${bedStyleLabel} (${deckTypeLabel})`}`}
+                            </span>
+                          </div>
+                        </div>
+                      )
+                    ) : (
+                      <div className="relative w-full h-full">
                         <img
-                          src={aiGeneratedImage}
-                          alt="AI generated DD Fab flatbed"
+                          src={uploadedImage}
+                          alt="Selected truck ready for AI upfit"
                           className="w-full h-full object-cover"
                         />
-                        <span className="absolute bottom-2 left-2 px-2 py-0.5 rounded bg-[#FC5716] text-[10px] font-bold text-black">
-                          AFTER (DD FAB)
-                        </span>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="relative w-full h-full">
-                      <img
-                        src={previewViewMode === 'before' ? uploadedImage : aiGeneratedImage}
-                        alt={
-                          previewViewMode === 'before'
-                            ? 'Original truck photo'
-                            : 'AI rendered DD Fab flatbed'
-                        }
-                        className="w-full h-full object-cover"
-                      />
-                      <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-md bg-black/80 backdrop-blur-sm border border-white/15 text-[11px] font-bold text-white flex items-center gap-1.5">
-                        <span
-                          className={`w-2 h-2 rounded-full ${
-                            previewViewMode === 'before' ? 'bg-gray-400' : 'bg-[#FC5716]'
-                          }`}
-                        />
-                        <span>
-                          {previewViewMode === 'before'
-                            ? 'Original Truck Photo'
-                            : `AI Render: ${renderedSummaryLabel || `${bedStyleLabel} (${deckTypeLabel})`}`}
-                        </span>
-                      </div>
-                    </div>
-                  )
-                ) : (
-                  <div className="relative w-full h-full">
-                    <img
-                      src={uploadedImage}
-                      alt="Selected truck ready for AI upfit"
-                      className="w-full h-full object-cover"
-                    />
-                    <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-md bg-black/80 backdrop-blur-sm border border-white/15 text-[11px] font-semibold text-gray-200">
-                      Original Truck (Ready for AI Flatbed Fitment)
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {isRenderOutdated && !isAiGenerating && (
-                <div className="mt-2.5 px-3 py-2 rounded-lg bg-[#FC5716]/15 border border-[#FC5716]/40 text-xs text-[#FC5716] font-medium flex items-center justify-between gap-2">
-                  <span>Options changed - click below to refresh your AI preview</span>
-                </div>
-              )}
-
-              {/* Error alert if AI fails */}
-              {aiError && (
-                <div
-                  role="alert"
-                  className="mt-3 p-3 rounded-lg bg-red-950/70 border border-red-700/50 text-xs text-red-200"
-                >
-                  {aiError}
-                </div>
-              )}
-
-              {/* Chosen Options Summary Pill Bar */}
-              <div className="mt-3.5 bg-[#171717] border border-[#282828] rounded-xl p-3">
-                <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">
-                  Your Selected Configuration
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  <span className="px-2.5 py-1 rounded-md bg-[#222222] text-xs font-semibold text-white">
-                    {truckYear} {resolvedTruckName}
-                  </span>
-                  {showPrices && (
-                    <span className="px-2.5 py-1 rounded-md bg-[#222222] text-xs font-semibold text-gray-200">
-                      {wheelConfigLabel} · {bedLengthLabel}
-                    </span>
-                  )}
-                  <span className="px-2.5 py-1 rounded-md bg-[#FC5716]/20 border border-[#FC5716]/40 text-xs font-bold text-[#FC5716]">
-                    {bedStyleLabel}
-                  </span>
-                  <span className="px-2.5 py-1 rounded-md bg-[#FC5716]/20 border border-[#FC5716]/40 text-xs font-bold text-[#FC5716]">
-                    {deckTypeLabel}
-                  </span>
-                  {allSelectedAddOnLabels.map((label) => (
-                    <span
-                      key={label}
-                      className="px-2.5 py-1 rounded-md bg-[#242424] border border-[#363636] text-xs font-medium text-gray-200"
-                    >
-                      + {label}
-                    </span>
-                  ))}
-                  {priceBreakdown.itemizedDeductions.map((ded) => (
-                    <span
-                      key={ded.label}
-                      className="px-2.5 py-1 rounded-md bg-emerald-950/50 border border-emerald-700/40 text-xs font-medium text-emerald-300"
-                    >
-                      {ded.label} (-${ded.amount})
-                    </span>
-                  ))}
-                </div>
-
-                {/* Optional Price Sheet Breakdown */}
-                {showPrices && (
-                  <div className="mt-3 pt-2.5 border-t border-[#2a2a2a] text-xs space-y-1">
-                    <div className="flex justify-between text-gray-300">
-                      <span>
-                        {bedStyleLabel} - {deckTypeLabel} ({wheelConfigLabel}):
-                      </span>
-                      <span className="font-semibold text-white">
-                        {priceBreakdown.basePrice !== null
-                          ? `$${priceBreakdown.basePrice.toLocaleString()}`
-                          : 'Call for pricing'}
-                      </span>
-                    </div>
-                    {priceBreakdown.basePrice !== null && (
-                      <div className="flex justify-between text-gray-400">
-                        <span>Standard Installation:</span>
-                        <span>+${priceBreakdown.installPrice.toLocaleString()}</span>
+                        <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-md bg-black/80 backdrop-blur-sm border border-white/15 text-[11px] font-semibold text-gray-200">
+                          Original Truck (Ready for AI Flatbed Fitment)
+                        </div>
                       </div>
                     )}
-                    {priceBreakdown.itemizedAddOns.map((item) => (
-                      <div key={item.label} className="flex justify-between text-gray-400">
-                        <span>{item.label}:</span>
-                        <span>+${item.price.toLocaleString()}</span>
-                      </div>
-                    ))}
-                    {priceBreakdown.itemizedDeductions.map((ded) => (
-                      <div key={ded.label} className="flex justify-between text-emerald-400">
-                        <span>{ded.label}:</span>
-                        <span>-${ded.amount.toLocaleString()}</span>
-                      </div>
-                    ))}
-                    <div className="flex justify-between items-center pt-1.5 border-t border-[#2e2e2e] font-bold text-sm text-white">
-                      <span>Estimated Installed Total:</span>
-                      <span className="text-[#FC5716]">
-                        {priceBreakdown.totalInstalled !== null
-                          ? `$${priceBreakdown.totalInstalled.toLocaleString()}`
-                          : 'Custom Cab/Chassis Quote'}
-                      </span>
-                    </div>
                   </div>
-                )}
-              </div>
 
-              {/* Primary AI Action & Request Quote CTAs (Single primary orange button at all times) */}
-              <div className="mt-4 flex flex-col gap-2.5">
-                {aiGeneratedImage && !isQuoteFormOpen && (
-                  <button
-                    type="button"
-                    onClick={handleOpenQuoteRequest}
-                    className={`w-full py-3.5 px-4 rounded-xl font-heading font-bold text-base tracking-wide transition flex items-center justify-center gap-2 cursor-pointer ${
-                      isRenderOutdated
-                        ? 'bg-[#1e1e1e] hover:bg-[#282828] text-gray-200 border border-[#3a3a3a]'
-                        : 'bg-[#FC5716] hover:bg-[#ff682b] text-black shadow-lg shadow-[#FC5716]/30 ring-2 ring-[#FC5716]/40'
-                    }`}
-                  >
-                    <FileText className="w-4 h-4" />
-                    <span>Request a Quote for This Setup</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
-                )}
-
-                <button
-                  type="button"
-                  disabled={!uploadedImage || isAiGenerating}
-                  onClick={handleGenerateAiFlatbed}
-                  className={`w-full py-3.5 px-4 rounded-xl font-heading font-bold text-base tracking-wide transition flex items-center justify-center gap-2 cursor-pointer ${
-                    aiGeneratedImage && !isRenderOutdated
-                      ? 'bg-[#222222] hover:bg-[#2c2c2c] text-white border border-[#3a3a3a]'
-                      : 'bg-[#FC5716] hover:bg-[#ff682b] text-black shadow-lg shadow-[#FC5716]/25'
-                  }`}
-                >
-                  {isAiGenerating ? (
-                    <>
-                      <Sparkles className="w-4 h-4 fill-black" />
-                      <span>AI Generating Your Flatbed...</span>
-                    </>
-                  ) : aiGeneratedImage ? (
-                    <>
-                      <RotateCcw
-                        className={`w-4 h-4 ${isRenderOutdated ? 'text-black' : 'text-[#FC5716]'}`}
-                      />
-                      <span>Re-Run AI Preview</span>
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="w-4 h-4 fill-black" />
-                      <span>Generate AI Flatbed Preview</span>
-                    </>
+                  {isRenderOutdated && !isAiGenerating && (
+                    <div className="mt-2.5 px-3 py-2 rounded-lg bg-[#FC5716]/15 border border-[#FC5716]/40 text-xs text-[#FC5716] font-medium flex items-center justify-between gap-2">
+                      <span>Options changed - click Re-Run AI Preview to refresh your truck</span>
+                    </div>
                   )}
-                </button>
 
-                {aiGeneratedImage && (
-                  <a
-                    href={aiGeneratedImage}
-                    download={`carolina-flatbeds-${truckYear}-${bedStyle}-${deckType}.jpg`}
-                    className="w-full py-2 px-3 rounded-lg bg-[#161616] hover:bg-[#202020] border border-[#2c2c2c] text-xs font-semibold text-gray-300 flex items-center justify-center gap-1.5 transition"
-                  >
-                    <Download className="w-3.5 h-3.5 text-[#FC5716]" />
-                    <span>Download AI Preview Image</span>
-                  </a>
-                )}
+                  {/* Error alert if AI fails */}
+                  {aiError && (
+                    <div
+                      role="alert"
+                      className="mt-3 p-3 rounded-lg bg-red-950/70 border border-red-700/50 text-xs text-red-200"
+                    >
+                      {aiError}
+                    </div>
+                  )}
+                </div>
+
+                {/* Right 5 Cols inside Step 3: Selected Configuration Summary & Primary CTAs */}
+                <div className="lg:col-span-5 flex flex-col justify-between space-y-4">
+                  {/* Chosen Options Summary Pill Bar */}
+                  <div className="bg-[#171717] border border-[#282828] rounded-xl p-3.5">
+                    <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2.5">
+                      Your Selected Configuration
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      <span className="px-2.5 py-1 rounded-md bg-[#222222] text-xs font-semibold text-white">
+                        {truckYear} {resolvedTruckName}
+                      </span>
+                      {showPrices && (
+                        <span className="px-2.5 py-1 rounded-md bg-[#222222] text-xs font-semibold text-gray-200">
+                          {wheelConfigLabel} · {bedLengthLabel}
+                        </span>
+                      )}
+                      <span className="px-2.5 py-1 rounded-md bg-[#FC5716]/20 border border-[#FC5716]/40 text-xs font-bold text-[#FC5716]">
+                        {bedStyleLabel}
+                      </span>
+                      <span className="px-2.5 py-1 rounded-md bg-[#FC5716]/20 border border-[#FC5716]/40 text-xs font-bold text-[#FC5716]">
+                        {deckTypeLabel}
+                      </span>
+                      {allSelectedAddOnLabels.map((label) => (
+                        <span
+                          key={label}
+                          className="px-2.5 py-1 rounded-md bg-[#242424] border border-[#363636] text-xs font-medium text-gray-200"
+                        >
+                          + {label}
+                        </span>
+                      ))}
+                      {priceBreakdown.itemizedDeductions.map((ded) => (
+                        <span
+                          key={ded.label}
+                          className="px-2.5 py-1 rounded-md bg-emerald-950/50 border border-emerald-700/40 text-xs font-medium text-emerald-300"
+                        >
+                          {ded.label} (-${ded.amount})
+                        </span>
+                      ))}
+                    </div>
+
+                    {/* Optional Price Sheet Breakdown */}
+                    {showPrices && (
+                      <div className="mt-3 pt-2.5 border-t border-[#2a2a2a] text-xs space-y-1">
+                        <div className="flex justify-between text-gray-300">
+                          <span>
+                            {bedStyleLabel} - {deckTypeLabel} ({wheelConfigLabel}):
+                          </span>
+                          <span className="font-semibold text-white">
+                            {priceBreakdown.basePrice !== null
+                              ? `$${priceBreakdown.basePrice.toLocaleString()}`
+                              : 'Call for pricing'}
+                          </span>
+                        </div>
+                        {priceBreakdown.basePrice !== null && (
+                          <div className="flex justify-between text-gray-400">
+                            <span>Standard Installation:</span>
+                            <span>+${priceBreakdown.installPrice.toLocaleString()}</span>
+                          </div>
+                        )}
+                        {priceBreakdown.itemizedAddOns.map((item) => (
+                          <div key={item.label} className="flex justify-between text-gray-400">
+                            <span>{item.label}:</span>
+                            <span>+${item.price.toLocaleString()}</span>
+                          </div>
+                        ))}
+                        {priceBreakdown.itemizedDeductions.map((ded) => (
+                          <div key={ded.label} className="flex justify-between text-emerald-400">
+                            <span>{ded.label}:</span>
+                            <span>-${ded.amount.toLocaleString()}</span>
+                          </div>
+                        ))}
+                        <div className="flex justify-between items-center pt-1.5 border-t border-[#2e2e2e] font-bold text-sm text-white">
+                          <span>Estimated Installed Total:</span>
+                          <span className="text-[#FC5716]">
+                            {priceBreakdown.totalInstalled !== null
+                              ? `$${priceBreakdown.totalInstalled.toLocaleString()}`
+                              : 'Custom Cab/Chassis Quote'}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Primary AI Action & Request Quote CTAs (Single primary orange button at all times) */}
+                  <div className="flex flex-col gap-2.5">
+                    {aiGeneratedImage && !isQuoteFormOpen && (
+                      <button
+                        type="button"
+                        onClick={handleOpenQuoteRequest}
+                        className={`w-full py-3.5 px-4 rounded-xl font-heading font-bold text-base tracking-wide transition flex items-center justify-center gap-2 cursor-pointer ${
+                          isRenderOutdated
+                            ? 'bg-[#1e1e1e] hover:bg-[#282828] text-gray-200 border border-[#3a3a3a]'
+                            : 'bg-[#FC5716] hover:bg-[#ff682b] text-black shadow-lg shadow-[#FC5716]/30 ring-2 ring-[#FC5716]/40'
+                        }`}
+                      >
+                        <FileText className="w-4 h-4" />
+                        <span>Request a Quote for This Setup</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      disabled={!uploadedImage || isAiGenerating}
+                      onClick={handleGenerateAiFlatbed}
+                      className={`w-full py-3.5 px-4 rounded-xl font-heading font-bold text-base tracking-wide transition flex items-center justify-center gap-2 cursor-pointer ${
+                        aiGeneratedImage && !isRenderOutdated
+                          ? 'bg-[#222222] hover:bg-[#2c2c2c] text-white border border-[#3a3a3a]'
+                          : 'bg-[#FC5716] hover:bg-[#ff682b] text-black shadow-lg shadow-[#FC5716]/25'
+                      }`}
+                    >
+                      {isAiGenerating ? (
+                        <>
+                          <Sparkles className="w-4 h-4 fill-black" />
+                          <span>AI Generating Your Flatbed...</span>
+                        </>
+                      ) : aiGeneratedImage ? (
+                        <>
+                          <RotateCcw
+                            className={`w-4 h-4 ${isRenderOutdated ? 'text-black' : 'text-[#FC5716]'}`}
+                          />
+                          <span>Re-Run AI Preview</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-4 h-4 fill-black" />
+                          <span>Generate AI Flatbed Preview</span>
+                        </>
+                      )}
+                    </button>
+
+                    {aiGeneratedImage && (
+                      <a
+                        href={aiGeneratedImage}
+                        download={`carolina-flatbeds-${truckYear}-${bedStyle}-${deckType}.jpg`}
+                        className="w-full py-2.5 px-3 rounded-lg bg-[#161616] hover:bg-[#202020] border border-[#2c2c2c] text-xs font-semibold text-gray-300 flex items-center justify-center gap-1.5 transition"
+                      >
+                        <Download className="w-3.5 h-3.5 text-[#FC5716]" />
+                        <span>Download AI Preview Image</span>
+                      </a>
+                    )}
+                  </div>
+                </div>
               </div>
             </section>
 
@@ -2115,7 +2165,7 @@ export default function App() {
             {isQuoteFormOpen && !isAiGenerating && (
               <section
                 ref={quoteSectionRef}
-                className="bg-[#141312] border-2 border-[#FC5716]/60 rounded-xl p-4 sm:p-5 shadow-2xl"
+                className="bg-[#141312] border-2 border-[#FC5716]/60 rounded-xl p-4 sm:p-6 shadow-2xl"
               >
                 {quoteSubmitted ? (
                   <div className="py-4 text-center space-y-3">
@@ -2282,7 +2332,7 @@ export default function App() {
 
       {/* Simple Footer */}
       <footer className="border-t border-[#1e1e1e] bg-[#0a0a0a] py-4 px-4 text-center text-xs text-gray-400">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
+        <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
           <span>Carolina Flatbeds | Authorized DD Fab Dealer & Upfitter - Charleston, SC</span>
           <span>
             Questions or Custom Builds? Call{' '}
