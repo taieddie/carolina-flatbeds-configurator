@@ -1116,9 +1116,9 @@ export default function App() {
               <Truck className="w-5 h-5 text-[#FC5716] shrink-0 hidden sm:block" />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-stretch">
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-start">
               {/* Left 7 Cols inside Step 1: Truck Make/Model, Year & Sample Truck Quick-Picks */}
-              <div className="md:col-span-7 flex flex-col justify-between space-y-4">
+              <div className="md:col-span-7 flex flex-col space-y-4">
                 <div>
                   {/* Truck Make/Model & Year Dropdowns */}
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
@@ -1282,9 +1282,9 @@ export default function App() {
                           <img
                             src={sample.beforeImage}
                             alt={sample.label}
-                            className="w-12 h-9 rounded object-cover shrink-0 border border-[#333333]"
+                            className="w-10 h-8 sm:w-12 sm:h-9 rounded object-cover shrink-0 border border-[#333333]"
                           />
-                          <span className="text-xs font-semibold leading-tight line-clamp-2">
+                          <span className="text-[11px] sm:text-xs font-semibold leading-tight">
                             {sample.shortLabel}
                           </span>
                         </button>
@@ -1339,7 +1339,7 @@ export default function App() {
                   />
 
                   {uploadedImage ? (
-                    <div className="relative aspect-[16/10] w-full rounded-lg overflow-hidden border border-[#2e2e2e] bg-[#0a0a0a] mb-3">
+                    <div className="relative h-40 sm:h-44 w-full rounded-lg overflow-hidden border border-[#2e2e2e] bg-[#0a0a0a] mb-2.5">
                       <img
                         src={uploadedImage}
                         alt="Selected pickup truck"
@@ -1350,7 +1350,7 @@ export default function App() {
                       </span>
                     </div>
                   ) : (
-                    <div className="aspect-[16/10] w-full rounded-lg border border-[#2a2a2a] bg-[#111111] flex flex-col items-center justify-center mb-3 p-4">
+                    <div className="h-40 sm:h-44 w-full rounded-lg border border-[#2a2a2a] bg-[#111111] flex flex-col items-center justify-center mb-2.5 p-4">
                       <ImageIcon className="w-8 h-8 text-gray-500 mb-1.5" />
                       <span className="text-xs text-gray-400 font-medium">
                         No truck photo selected
