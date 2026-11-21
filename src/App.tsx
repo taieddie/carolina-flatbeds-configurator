@@ -1284,7 +1284,7 @@ export default function App() {
                             alt={sample.label}
                             className="w-10 h-8 rounded object-cover shrink-0 border border-[#333333]"
                           />
-                          <span className="text-[11px] sm:text-xs font-semibold leading-tight">
+                          <span className="text-[11px] sm:text-xs font-semibold leading-tight line-clamp-2">
                             {sample.shortLabel}
                           </span>
                         </button>
