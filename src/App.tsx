@@ -52,7 +52,7 @@ const SAMPLE_TRUCKS: SampleTruck[] = [
   {
     id: 'silverado',
     label: '2024 Chevy Silverado 2500HD',
-    shortLabel: '2024 Silverado 2500HD',
+    shortLabel: '2024 Chevy 2500HD',
     year: '2024',
     makeModel: 'Chevy Silverado 2500 / 3500 HD',
     wheelConfig: 'srw',
@@ -1273,7 +1273,7 @@ export default function App() {
                           type="button"
                           aria-pressed={isSelected}
                           onClick={() => handleSelectSampleTruck(sample)}
-                          className={`group flex items-center gap-2.5 p-2 rounded-lg border text-left transition cursor-pointer ${
+                          className={`group flex items-center gap-2 p-1.5 rounded-lg border text-left transition cursor-pointer ${
                             isSelected
                               ? 'border-[#FC5716] bg-[#FC5716]/15 text-white'
                               : 'border-[#2a2a2a] bg-[#181818] text-gray-300 hover:border-gray-500'
@@ -1282,7 +1282,7 @@ export default function App() {
                           <img
                             src={sample.beforeImage}
                             alt={sample.label}
-                            className="w-10 h-8 sm:w-12 sm:h-9 rounded object-cover shrink-0 border border-[#333333]"
+                            className="w-10 h-8 rounded object-cover shrink-0 border border-[#333333]"
                           />
                           <span className="text-[11px] sm:text-xs font-semibold leading-tight">
                             {sample.shortLabel}
@@ -1874,9 +1874,9 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                {/* Left 7 Cols inside Step 3: Large AI Render Viewport & View Mode Toggles */}
-                <div className="lg:col-span-7 flex flex-col">
+              <div className="flex flex-col space-y-4">
+                {/* Large Full-Width AI Render Stage & View Mode Toggles */}
+                <div className="flex flex-col">
                   {/* Before / After / Side-by-Side Toggle Bar (when AI render is complete) */}
                   {aiGeneratedImage && !isAiGenerating && (
                     <div className="flex items-center justify-between gap-2 mb-3 bg-[#181818] p-1 rounded-lg border border-[#2c2c2c]">
@@ -1905,7 +1905,7 @@ export default function App() {
                   )}
 
                   {/* Live AI Render Viewport */}
-                  <div className="relative rounded-xl overflow-hidden border border-[#2e2e2e] bg-[#0a0a0a] aspect-[16/10] flex items-center justify-center">
+                  <div className="relative rounded-xl overflow-hidden border border-[#2e2e2e] bg-[#0a0a0a] w-full aspect-[16/10] sm:aspect-[16/9] max-h-[460px] flex items-center justify-center">
                     {!uploadedImage ? (
                       <div className="p-6 text-center">
                         <ImageIcon className="w-10 h-10 text-gray-600 mx-auto mb-2" />
@@ -1935,14 +1935,14 @@ export default function App() {
                       </div>
                     ) : aiGeneratedImage ? (
                       previewViewMode === 'split' ? (
-                        <div className="grid grid-cols-2 gap-1 w-full h-full bg-[#1a1a1a]">
+                        <div className="grid grid-cols-2 gap-1.5 w-full h-full bg-[#1a1a1a]">
                           <div className="relative w-full h-full overflow-hidden">
                             <img
                               src={uploadedImage}
                               alt="Original pickup truck"
                               className="w-full h-full object-cover"
                             />
-                            <span className="absolute bottom-2 left-2 px-2 py-0.5 rounded bg-black/80 text-[10px] font-bold text-gray-200 border border-white/15">
+                            <span className="absolute bottom-2.5 left-2.5 px-2.5 py-1 rounded bg-black/80 text-xs font-bold text-gray-200 border border-white/15">
                               BEFORE
                             </span>
                           </div>
@@ -1952,7 +1952,7 @@ export default function App() {
                               alt="AI generated DD Fab flatbed"
                               className="w-full h-full object-cover"
                             />
-                            <span className="absolute bottom-2 left-2 px-2 py-0.5 rounded bg-[#FC5716] text-[10px] font-bold text-black">
+                            <span className="absolute bottom-2.5 left-2.5 px-2.5 py-1 rounded bg-[#FC5716] text-xs font-bold text-black">
                               AFTER (DD FAB)
                             </span>
                           </div>
@@ -2013,8 +2013,8 @@ export default function App() {
                   )}
                 </div>
 
-                {/* Right 5 Cols inside Step 3: Selected Configuration Summary & Primary CTAs */}
-                <div className="lg:col-span-5 flex flex-col justify-between space-y-4">
+                {/* Selected Configuration Summary & Primary CTAs (Full-Width) */}
+                <div className="flex flex-col space-y-4">
                   {/* Chosen Options Summary Pill Bar */}
                   <div className="bg-[#171717] border border-[#282828] rounded-xl p-3.5">
                     <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2.5">
@@ -2114,46 +2114,48 @@ export default function App() {
                       </button>
                     )}
 
-                    <button
-                      type="button"
-                      disabled={!uploadedImage || isAiGenerating}
-                      onClick={handleGenerateAiFlatbed}
-                      className={`w-full py-3.5 px-4 rounded-xl font-heading font-bold text-base tracking-wide transition flex items-center justify-center gap-2 cursor-pointer ${
-                        aiGeneratedImage && !isRenderOutdated
-                          ? 'bg-[#222222] hover:bg-[#2c2c2c] text-white border border-[#3a3a3a]'
-                          : 'bg-[#FC5716] hover:bg-[#ff682b] text-black shadow-lg shadow-[#FC5716]/25'
-                      }`}
-                    >
-                      {isAiGenerating ? (
-                        <>
-                          <Sparkles className="w-4 h-4 fill-black" />
-                          <span>AI Generating Your Flatbed...</span>
-                        </>
-                      ) : aiGeneratedImage ? (
-                        <>
-                          <RotateCcw
-                            className={`w-4 h-4 ${isRenderOutdated ? 'text-black' : 'text-[#FC5716]'}`}
-                          />
-                          <span>Re-Run AI Preview</span>
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles className="w-4 h-4 fill-black" />
-                          <span>Generate AI Flatbed Preview</span>
-                        </>
-                      )}
-                    </button>
-
-                    {aiGeneratedImage && (
-                      <a
-                        href={aiGeneratedImage}
-                        download={`carolina-flatbeds-${truckYear}-${bedStyle}-${deckType}.jpg`}
-                        className="w-full py-2.5 px-3 rounded-lg bg-[#161616] hover:bg-[#202020] border border-[#2c2c2c] text-xs font-semibold text-gray-300 flex items-center justify-center gap-1.5 transition"
+                    <div className={aiGeneratedImage ? 'grid grid-cols-1 sm:grid-cols-2 gap-2.5' : ''}>
+                      <button
+                        type="button"
+                        disabled={!uploadedImage || isAiGenerating}
+                        onClick={handleGenerateAiFlatbed}
+                        className={`w-full py-3.5 px-4 rounded-xl font-heading font-bold text-base tracking-wide transition flex items-center justify-center gap-2 cursor-pointer ${
+                          aiGeneratedImage && !isRenderOutdated
+                            ? 'bg-[#222222] hover:bg-[#2c2c2c] text-white border border-[#3a3a3a]'
+                            : 'bg-[#FC5716] hover:bg-[#ff682b] text-black shadow-lg shadow-[#FC5716]/25'
+                        }`}
                       >
-                        <Download className="w-3.5 h-3.5 text-[#FC5716]" />
-                        <span>Download AI Preview Image</span>
-                      </a>
-                    )}
+                        {isAiGenerating ? (
+                          <>
+                            <Sparkles className="w-4 h-4 fill-black" />
+                            <span>AI Generating Your Flatbed...</span>
+                          </>
+                        ) : aiGeneratedImage ? (
+                          <>
+                            <RotateCcw
+                              className={`w-4 h-4 ${isRenderOutdated ? 'text-black' : 'text-[#FC5716]'}`}
+                            />
+                            <span>Re-Run AI Preview</span>
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-4 h-4 fill-black" />
+                            <span>Generate AI Flatbed Preview</span>
+                          </>
+                        )}
+                      </button>
+
+                      {aiGeneratedImage && (
+                        <a
+                          href={aiGeneratedImage}
+                          download={`carolina-flatbeds-${truckYear}-${bedStyle}-${deckType}.jpg`}
+                          className="w-full py-3.5 px-4 rounded-xl bg-[#161616] hover:bg-[#202020] border border-[#2c2c2c] text-sm font-semibold text-gray-200 flex items-center justify-center gap-2 transition"
+                        >
+                          <Download className="w-4 h-4 text-[#FC5716]" />
+                          <span>Download AI Preview Image</span>
+                        </a>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
