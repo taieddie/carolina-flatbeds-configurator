@@ -646,7 +646,13 @@ export default function App() {
   const getExactPreRenderedSampleMatch = (): string | null => {
     if (!uploadedImage || selectedAddOns.length > 0 || wheelConfig !== 'srw') return null;
     const activeSample = SAMPLE_TRUCKS.find((s) => s.id === activeSampleId);
-    if (!activeSample || bedLength !== activeSample.bedLength) return null;
+    if (
+      !activeSample ||
+      bedLength !== activeSample.bedLength ||
+      truckMakeModel !== activeSample.makeModel
+    ) {
+      return null;
+    }
 
     if (uploadedImage.includes('stock_f250')) {
       if (bedStyle === 'standard' && deckType === 'wood') return './assets/f250_heritage_wood.jpg';
@@ -677,9 +683,11 @@ export default function App() {
     return null;
   };
 
-  // Fallback pre-rendered image lookup ONLY when bedStyle and deckType match the pre-rendered asset
+  // Fallback pre-rendered image lookup ONLY when bedStyle, deckType, and makeModel match the pre-rendered asset
   const getSampleFallbackImage = (): string | null => {
     if (!uploadedImage) return null;
+    const activeSample = SAMPLE_TRUCKS.find((s) => s.id === activeSampleId);
+    if (activeSample && truckMakeModel !== activeSample.makeModel) return null;
     if (uploadedImage.includes('stock_f250')) {
       if (bedStyle === 'standard' && deckType === 'wood') return './assets/f250_heritage_wood.jpg';
       if (bedStyle === 'standard' && deckType === 'steel') return './assets/f250_standard_work.jpg';
@@ -715,14 +723,15 @@ export default function App() {
     setAiError(null);
     setIsAiGenerating(true);
     setPreviewViewMode('after');
+    setIsQuoteFormOpen(false);
     setQuoteSubmitted(false);
 
-    // Smooth scroll to the live preview card on mobile/tablet
-    if (typeof window !== 'undefined' && window.innerWidth < 1024 && previewCardRef.current) {
+    // Smooth scroll to the live preview card (accounting for 64px sticky header + 16px margin)
+    if (typeof window !== 'undefined' && previewCardRef.current) {
       requestAnimationFrame(() => {
         const rect = previewCardRef.current?.getBoundingClientRect();
-        if (rect) {
-          window.scrollTo({ top: window.scrollY + rect.top - 20, behavior: 'smooth' });
+        if (rect && (window.innerWidth < 1024 || rect.top < 70)) {
+          window.scrollTo({ top: Math.max(0, window.scrollY + rect.top - 80), behavior: 'smooth' });
         }
       });
     }
@@ -854,14 +863,14 @@ export default function App() {
     }
   };
 
-  // Open & scroll to the Quote Request Card
+  // Open & scroll to the Quote Request Card (accounting for 64px sticky header + 16px margin)
   const handleOpenQuoteRequest = () => {
     setIsQuoteFormOpen(true);
     requestAnimationFrame(() => {
       setTimeout(() => {
         if (quoteSectionRef.current) {
           const rect = quoteSectionRef.current.getBoundingClientRect();
-          window.scrollTo({ top: window.scrollY + rect.top - 24, behavior: 'smooth' });
+          window.scrollTo({ top: Math.max(0, window.scrollY + rect.top - 80), behavior: 'smooth' });
         }
       }, 60);
     });
@@ -1095,7 +1104,18 @@ export default function App() {
                   <select
                     id="truck-make-model"
                     value={truckMakeModel}
-                    onChange={(e) => setTruckMakeModel(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setTruckMakeModel(val);
+                      if (activeSampleId !== null) {
+                        const matchedSample = SAMPLE_TRUCKS.find((s) => s.makeModel === val);
+                        if (matchedSample) {
+                          setActiveSampleId(matchedSample.id);
+                          setUploadedImage(matchedSample.beforeImage);
+                          setBedLength(matchedSample.bedLength);
+                        }
+                      }
+                    }}
                     className="w-full bg-[#1a1a1a] border border-[#333333] focus:border-[#FC5716] rounded-lg px-3.5 py-2.5 text-sm text-white font-medium outline-none transition"
                   >
                     {TRUCK_MAKE_MODELS.map((item) => (
@@ -1343,7 +1363,7 @@ export default function App() {
               <div className="mb-6">
                 <div className="flex items-center justify-between mb-2.5">
                   <h3 className="text-xs sm:text-sm font-bold text-white uppercase tracking-wider">
-                    1. Choose Flatbed Style (Non-Skirted vs. Full Skirted)
+                    A. Choose Flatbed Style (Non-Skirted vs. Full Skirted)
                   </h3>
                 </div>
 
@@ -1451,7 +1471,7 @@ export default function App() {
               {/* 2B. CHOOSE YOUR DECK TYPE (WOOD, TREX, STEEL) */}
               <div className="mb-6">
                 <h3 className="text-xs sm:text-sm font-bold text-white uppercase tracking-wider mb-2.5">
-                  2. Choose Your Deck Type
+                  B. Choose Your Deck Type
                 </h3>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -1544,7 +1564,7 @@ export default function App() {
               <div>
                 <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5">
                   <h3 className="text-xs sm:text-sm font-bold text-white uppercase tracking-wider">
-                    3. Choose Your Add-Ons (Optional)
+                    C. Choose Your Add-Ons (Optional)
                   </h3>
                   {bedStyle === 'full-skirted' && (
                     <span className="text-[11px] text-emerald-400 bg-emerald-950/50 border border-emerald-700/40 px-2.5 py-0.5 rounded-full font-medium">
@@ -1793,7 +1813,7 @@ export default function App() {
           {/* ========================================================= */}
           <div
             ref={previewCardRef}
-            className="lg:col-span-5 lg:sticky lg:top-20 flex flex-col space-y-5"
+            className={`lg:col-span-5 ${isQuoteFormOpen ? '' : 'lg:sticky lg:top-20'} flex flex-col space-y-5`}
           >
             <section className="bg-[#121212] border border-[#262626] rounded-xl p-4 sm:p-5 shadow-2xl">
               <div className="flex items-center justify-between gap-2 pb-3.5 mb-3.5 border-b border-[#222222]">
@@ -1829,8 +1849,8 @@ export default function App() {
                       onClick={() => setPreviewViewMode(mode.id)}
                       className={`flex-1 py-1.5 px-2 rounded-md text-xs font-semibold transition cursor-pointer text-center ${
                         previewViewMode === mode.id
-                          ? 'bg-[#FC5716] text-black font-bold shadow'
-                          : 'text-gray-300 hover:text-white'
+                          ? 'bg-[#261c17] text-[#FC5716] border border-[#FC5716]/60 font-bold shadow'
+                          : 'text-gray-300 hover:text-white border border-transparent'
                       }`}
                     >
                       {mode.label}
@@ -2028,13 +2048,17 @@ export default function App() {
                 )}
               </div>
 
-              {/* Primary AI Action & Request Quote CTAs (Request Quote appears once AI image is complete) */}
+              {/* Primary AI Action & Request Quote CTAs (Single primary orange button at all times) */}
               <div className="mt-4 flex flex-col gap-2.5">
-                {aiGeneratedImage && (
+                {aiGeneratedImage && !isQuoteFormOpen && (
                   <button
                     type="button"
                     onClick={handleOpenQuoteRequest}
-                    className="w-full py-3.5 px-4 rounded-xl font-heading font-bold text-base tracking-wide transition flex items-center justify-center gap-2 cursor-pointer bg-[#FC5716] hover:bg-[#ff682b] text-black shadow-lg shadow-[#FC5716]/30 ring-2 ring-[#FC5716]/40"
+                    className={`w-full py-3.5 px-4 rounded-xl font-heading font-bold text-base tracking-wide transition flex items-center justify-center gap-2 cursor-pointer ${
+                      isRenderOutdated
+                        ? 'bg-[#1e1e1e] hover:bg-[#282828] text-gray-200 border border-[#3a3a3a]'
+                        : 'bg-[#FC5716] hover:bg-[#ff682b] text-black shadow-lg shadow-[#FC5716]/30 ring-2 ring-[#FC5716]/40'
+                    }`}
                   >
                     <FileText className="w-4 h-4" />
                     <span>Request a Quote for This Setup</span>
@@ -2062,7 +2086,7 @@ export default function App() {
                       <RotateCcw
                         className={`w-4 h-4 ${isRenderOutdated ? 'text-black' : 'text-[#FC5716]'}`}
                       />
-                      <span>Re-Run AI With Updated Options</span>
+                      <span>Re-Run AI Preview</span>
                     </>
                   ) : (
                     <>
@@ -2086,9 +2110,9 @@ export default function App() {
             </section>
 
             {/* ========================================================= */}
-            {/* INLINE QUOTE REQUEST CARD (OPENS RIGHT BELOW PREVIEW)     */}
+            {/* INLINE QUOTE REQUEST CARD (OPENS WHEN USER CLICKS QUOTE)  */}
             {/* ========================================================= */}
-            {(isQuoteFormOpen || aiGeneratedImage) && (
+            {isQuoteFormOpen && !isAiGenerating && (
               <section
                 ref={quoteSectionRef}
                 className="bg-[#141312] border-2 border-[#FC5716]/60 rounded-xl p-4 sm:p-5 shadow-2xl"
