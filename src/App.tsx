@@ -335,6 +335,7 @@ export default function App() {
   const [aiStepText, setAiStepText] = useState<string>('Removing factory pickup bed...');
   const [aiError, setAiError] = useState<string | null>(null);
   const [previewViewMode, setPreviewViewMode] = useState<'after' | 'before' | 'split'>('after');
+  const [uploadedAspectRatio, setUploadedAspectRatio] = useState<string>('3:2');
 
   // Quote form state
   const [isQuoteFormOpen, setIsQuoteFormOpen] = useState<boolean>(false);
@@ -355,6 +356,33 @@ export default function App() {
   const step2Ref = useRef<HTMLElement>(null);
   const previewCardRef = useRef<HTMLDivElement>(null);
   const quoteSectionRef = useRef<HTMLDivElement>(null);
+  const generateAbortRef = useRef<AbortController | null>(null);
+  const generateRequestIdRef = useRef<number>(0);
+
+  const computeClosestAspectRatio = (w: number, h: number): string => {
+    const ratio = w / Math.max(1, h);
+    const candidates: Array<{ label: string; val: number }> = [
+      { label: '16:9', val: 16 / 9 },
+      { label: '3:2', val: 3 / 2 },
+      { label: '4:3', val: 4 / 3 },
+      { label: '5:4', val: 5 / 4 },
+      { label: '1:1', val: 1 },
+      { label: '4:5', val: 4 / 5 },
+      { label: '3:4', val: 3 / 4 },
+      { label: '2:3', val: 2 / 3 },
+      { label: '9:16', val: 9 / 16 }
+    ];
+    let best = candidates[0];
+    let minDiff = Math.abs(ratio - best.val);
+    for (const c of candidates) {
+      const diff = Math.abs(ratio - c.val);
+      if (diff < minDiff) {
+        minDiff = diff;
+        best = c;
+      }
+    }
+    return best.label;
+  };
 
   const scrollToSection = (el: HTMLElement | null) => {
     if (typeof window !== 'undefined' && el) {
@@ -555,7 +583,8 @@ export default function App() {
     }
 
     const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp'];
-    if (!allowedMimeTypes.includes(file.type)) {
+    const hasAllowedExt = /\.(jpe?g|png|webp)$/i.test(file.name || '');
+    if (!allowedMimeTypes.includes(file.type) && !(file.type === '' && hasAllowedExt)) {
       setUploadError('Unsupported format. Please upload a JPG, PNG, or WebP photo.');
       if (fileInputRef.current) fileInputRef.current.value = '';
       return;
@@ -598,6 +627,10 @@ export default function App() {
           ctx.fillRect(0, 0, targetW, targetH);
           ctx.drawImage(img, 0, 0, targetW, targetH);
           const sanitizedDataUrl = canvas.toDataURL('image/jpeg', 0.92);
+          generateAbortRef.current?.abort();
+          generateRequestIdRef.current += 1;
+          setIsAiGenerating(false);
+          setUploadedAspectRatio(computeClosestAspectRatio(targetW, targetH));
           setUploadedImage(sanitizedDataUrl);
           setActiveSampleId(null);
           setAiGeneratedImage(null);
@@ -632,10 +665,14 @@ export default function App() {
 
   // One-click sample truck loader
   const handleSelectSampleTruck = (sample: SampleTruck) => {
+    generateAbortRef.current?.abort();
+    generateRequestIdRef.current += 1;
+    setIsAiGenerating(false);
     setUploadError(null);
     setAiError(null);
     setActiveSampleId(sample.id);
     setUploadedImage(sample.beforeImage);
+    setUploadedAspectRatio('3:2');
     setTruckYear(sample.year);
     setTruckMakeModel(sample.makeModel);
     setCustomMakeModel('');
@@ -655,6 +692,9 @@ export default function App() {
 
   // Check if current sample selection matches an exact pre-verified instant studio render
   const getExactPreRenderedSampleMatch = (): string | null => {
+    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('live') === '1') {
+      return null;
+    }
     if (!uploadedImage || selectedAddOns.length > 0 || wheelConfig !== 'srw') return null;
     const activeSample = SAMPLE_TRUCKS.find((s) => s.id === activeSampleId);
     if (
@@ -694,43 +734,14 @@ export default function App() {
     return null;
   };
 
-  // Fallback pre-rendered image lookup ONLY when bedStyle, deckType, and makeModel match the pre-rendered asset
-  const getSampleFallbackImage = (): string | null => {
-    if (!uploadedImage) return null;
-    const activeSample = SAMPLE_TRUCKS.find((s) => s.id === activeSampleId);
-    if (activeSample && truckMakeModel !== activeSample.makeModel) return null;
-    if (uploadedImage.includes('stock_f250')) {
-      if (bedStyle === 'standard' && deckType === 'wood') return './assets/f250_heritage_wood.jpg';
-      if (bedStyle === 'standard' && deckType === 'steel') return './assets/f250_standard_work.jpg';
-      if (bedStyle === 'full-skirted' && deckType === 'steel') return './assets/f250_lora_inpaint.jpg';
-    }
-    if (
-      uploadedImage.includes('stock_silverado_2500hd') &&
-      bedStyle === 'standard' &&
-      deckType === 'wood'
-    ) {
-      return './assets/after_silverado_heritage_wood.jpg';
-    }
-    if (
-      uploadedImage.includes('stock_sierra_2500hd') &&
-      bedStyle === 'standard' &&
-      deckType === 'steel'
-    ) {
-      return './assets/after_sierra_standard_utility.jpg';
-    }
-    if (
-      uploadedImage.includes('stock_ram_2500') &&
-      bedStyle === 'full-skirted' &&
-      deckType === 'steel'
-    ) {
-      return './assets/after_ram_deluxe_skirted.jpg';
-    }
-    return null;
-  };
-
   // Step 3: Trigger AI Flatbed Generation
   const handleGenerateAiFlatbed = async () => {
     if (!uploadedImage) return;
+    generateAbortRef.current?.abort();
+    const controller = new AbortController();
+    generateAbortRef.current = controller;
+    const reqId = ++generateRequestIdRef.current;
+
     setAiError(null);
     setIsAiGenerating(true);
     setPreviewViewMode('after');
@@ -812,12 +823,16 @@ export default function App() {
       const response = await fetch('https://cfb-ai-generator.tek123168.workers.dev', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
         body: JSON.stringify({
           image: imagePayload,
           modelId: legacyModelId,
           truckYear,
           truckMakeModel: resolvedTruckName,
           wheelConfig,
+          isCustomUpload: activeSampleId === null,
+          explicitWheelConfig: showPrices,
+          aspectRatio: uploadedAspectRatio,
           bedLength,
           bedStyle,
           deckType,
@@ -830,47 +845,33 @@ export default function App() {
       clearTimeout(timer1);
       clearTimeout(timer2);
 
+      if (reqId !== generateRequestIdRef.current) return;
+
       if (!response.ok) {
-        const fallback = getSampleFallbackImage();
-        if (fallback) {
-          setAiGeneratedImage(fallback);
-          setRenderedConfigKey(currentConfigKey);
-          setRenderedSummaryLabel(`${bedStyleLabel} (${deckTypeLabel})`);
-          return;
-        }
-        throw new Error('AI generator is currently busy. Please try again in a moment.');
+        throw new Error('AI generator is currently busy. Please click Generate AI Flatbed Preview to retry.');
       }
 
       const data = await response.json();
+      if (reqId !== generateRequestIdRef.current) return;
+
       if (data.imageUrl) {
         setAiGeneratedImage(data.imageUrl);
         setRenderedConfigKey(currentConfigKey);
         setRenderedSummaryLabel(`${bedStyleLabel} (${deckTypeLabel})`);
       } else {
-        const fallback = getSampleFallbackImage();
-        if (fallback) {
-          setAiGeneratedImage(fallback);
-          setRenderedConfigKey(currentConfigKey);
-          setRenderedSummaryLabel(`${bedStyleLabel} (${deckTypeLabel})`);
-          return;
-        }
-        throw new Error(data.error || 'No image returned from AI generator.');
+        throw new Error(data.error || 'No image returned from AI generator. Please try again.');
       }
     } catch (err: any) {
       clearTimeout(timer1);
       clearTimeout(timer2);
-      const fallback = getSampleFallbackImage();
-      if (fallback) {
-        setAiGeneratedImage(fallback);
-        setRenderedConfigKey(currentConfigKey);
-        setRenderedSummaryLabel(`${bedStyleLabel} (${deckTypeLabel})`);
-      } else {
-        setAiError(
-          err.message || 'Could not complete AI preview. Please click Generate AI Flatbed Preview to retry.'
-        );
-      }
+      if (err?.name === 'AbortError' || reqId !== generateRequestIdRef.current) return;
+      setAiError(
+        err.message || 'Could not complete AI preview. Please click Generate AI Flatbed Preview to retry.'
+      );
     } finally {
-      setIsAiGenerating(false);
+      if (reqId === generateRequestIdRef.current) {
+        setIsAiGenerating(false);
+      }
     }
   };
 
@@ -2148,7 +2149,9 @@ export default function App() {
                       {aiGeneratedImage && (
                         <a
                           href={aiGeneratedImage}
-                          download={`carolina-flatbeds-${truckYear}-${bedStyle}-${deckType}.jpg`}
+                          download={`carolina-flatbeds-${truckYear}-${bedStyle}-${deckType}.${
+                            aiGeneratedImage.startsWith('data:image/png') ? 'png' : 'jpg'
+                          }`}
                           className="w-full py-3.5 px-4 rounded-xl bg-[#161616] hover:bg-[#202020] border border-[#2c2c2c] text-sm font-semibold text-gray-200 flex items-center justify-center gap-2 transition"
                         >
                           <Download className="w-4 h-4 text-[#FC5716]" />
