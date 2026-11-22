@@ -2017,9 +2017,9 @@ export default function App() {
                 <div className="flex flex-col space-y-4">
                   {/* Chosen Options Summary Pill Bar */}
                   <div className="bg-[#171717] border border-[#282828] rounded-xl p-3.5">
-                    <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2.5">
+                    <p className="w-full text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2.5">
                       Your Selected Configuration
-                    </div>
+                    </p>
                     <div className="flex flex-wrap gap-1.5">
                       <span className="px-2.5 py-1 rounded-md bg-[#222222] text-xs font-semibold text-white">
                         {truckYear} {resolvedTruckName}
