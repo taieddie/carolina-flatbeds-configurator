@@ -1339,11 +1339,11 @@ export default function App() {
                   />
 
                   {uploadedImage ? (
-                    <div className="relative h-40 sm:h-44 w-full rounded-lg overflow-hidden border border-[#2e2e2e] bg-[#0a0a0a] mb-2.5">
+                    <div className="relative h-40 sm:h-44 w-full rounded-lg overflow-hidden border border-[#2e2e2e] bg-[#0a0a0a] mb-2.5 flex items-center justify-center">
                       <img
                         src={uploadedImage}
                         alt="Selected pickup truck"
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-contain"
                       />
                       <span className="absolute bottom-2 left-2 px-2 py-0.5 rounded bg-black/80 text-[10px] font-semibold text-gray-200 border border-white/15">
                         {truckYear} {resolvedTruckName}
@@ -1904,61 +1904,61 @@ export default function App() {
                     </div>
                   )}
 
-                  {/* Live AI Render Viewport */}
-                  <div className="relative rounded-xl overflow-hidden border border-[#2e2e2e] bg-[#0a0a0a] w-full aspect-[16/10] sm:aspect-[16/9] max-h-[460px] flex items-center justify-center">
-                    {!uploadedImage ? (
-                      <div className="p-6 text-center">
-                        <ImageIcon className="w-10 h-10 text-gray-600 mx-auto mb-2" />
-                        <p className="text-sm font-semibold text-gray-300">
-                          Upload a photo or select a sample truck in Step 1
-                        </p>
-                        <p className="text-xs text-gray-500 mt-1">
-                          Your truck preview will appear right here
-                        </p>
-                      </div>
-                    ) : isAiGenerating ? (
-                      <div className="relative w-full h-full" aria-live="polite">
+                  {/* Live AI Render Viewport (Zero Cropping across 4:3, 16:10, and 16:9 Truck Photos) */}
+                  {aiGeneratedImage && !isAiGenerating && previewViewMode === 'split' ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
+                      <div className="relative rounded-xl overflow-hidden border border-[#2e2e2e] bg-[#0a0a0a] aspect-[16/10] flex items-center justify-center">
                         <img
-                          src={uploadedImage}
-                          alt="Generating flatbed preview"
-                          className="w-full h-full object-cover opacity-35 blur-[2px]"
+                          src={uploadedImage || ''}
+                          alt="Original pickup truck"
+                          className="w-full h-full object-contain"
                         />
-                        <div className="absolute inset-0 bg-black/65 flex flex-col items-center justify-center p-5 text-center">
-                          <div className="w-11 h-11 rounded-full border-3 border-[#FC5716] border-t-transparent animate-spin mb-3" />
-                          <div className="font-heading font-bold text-base text-white tracking-wide">
-                            AI UPFITTING YOUR TRUCK...
-                          </div>
-                          <p className="text-xs text-[#FC5716] font-medium mt-1 max-w-xs">
-                            {aiStepText}
+                        <span className="absolute bottom-2.5 left-2.5 px-2.5 py-1 rounded bg-black/80 text-xs font-bold text-gray-200 border border-white/15">
+                          BEFORE
+                        </span>
+                      </div>
+                      <div className="relative rounded-xl overflow-hidden border border-[#2e2e2e] bg-[#0a0a0a] aspect-[16/10] flex items-center justify-center">
+                        <img
+                          src={aiGeneratedImage}
+                          alt="AI generated DD Fab flatbed"
+                          className="w-full h-full object-contain"
+                        />
+                        <span className="absolute bottom-2.5 left-2.5 px-2.5 py-1 rounded bg-[#FC5716] text-xs font-bold text-black">
+                          AFTER (DD FAB)
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="relative rounded-xl overflow-hidden border border-[#2e2e2e] bg-[#0a0a0a] w-full aspect-[16/10] max-h-[520px] flex items-center justify-center">
+                      {!uploadedImage ? (
+                        <div className="p-6 text-center">
+                          <ImageIcon className="w-10 h-10 text-gray-600 mx-auto mb-2" />
+                          <p className="text-sm font-semibold text-gray-300">
+                            Upload a photo or select a sample truck in Step 1
+                          </p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            Your truck preview will appear right here
                           </p>
                         </div>
-                      </div>
-                    ) : aiGeneratedImage ? (
-                      previewViewMode === 'split' ? (
-                        <div className="grid grid-cols-2 gap-1.5 w-full h-full bg-[#1a1a1a]">
-                          <div className="relative w-full h-full overflow-hidden">
-                            <img
-                              src={uploadedImage}
-                              alt="Original pickup truck"
-                              className="w-full h-full object-cover"
-                            />
-                            <span className="absolute bottom-2.5 left-2.5 px-2.5 py-1 rounded bg-black/80 text-xs font-bold text-gray-200 border border-white/15">
-                              BEFORE
-                            </span>
-                          </div>
-                          <div className="relative w-full h-full overflow-hidden">
-                            <img
-                              src={aiGeneratedImage}
-                              alt="AI generated DD Fab flatbed"
-                              className="w-full h-full object-cover"
-                            />
-                            <span className="absolute bottom-2.5 left-2.5 px-2.5 py-1 rounded bg-[#FC5716] text-xs font-bold text-black">
-                              AFTER (DD FAB)
-                            </span>
+                      ) : isAiGenerating ? (
+                        <div className="relative w-full h-full" aria-live="polite">
+                          <img
+                            src={uploadedImage}
+                            alt="Generating flatbed preview"
+                            className="w-full h-full object-contain opacity-35 blur-[2px]"
+                          />
+                          <div className="absolute inset-0 bg-black/65 flex flex-col items-center justify-center p-5 text-center">
+                            <div className="w-11 h-11 rounded-full border-3 border-[#FC5716] border-t-transparent animate-spin mb-3" />
+                            <div className="font-heading font-bold text-base text-white tracking-wide">
+                              AI UPFITTING YOUR TRUCK...
+                            </div>
+                            <p className="text-xs text-[#FC5716] font-medium mt-1 max-w-xs">
+                              {aiStepText}
+                            </p>
                           </div>
                         </div>
-                      ) : (
-                        <div className="relative w-full h-full">
+                      ) : aiGeneratedImage ? (
+                        <div className="relative w-full h-full flex items-center justify-center">
                           <img
                             src={previewViewMode === 'before' ? uploadedImage : aiGeneratedImage}
                             alt={
@@ -1966,7 +1966,7 @@ export default function App() {
                                 ? 'Original truck photo'
                                 : 'AI rendered DD Fab flatbed'
                             }
-                            className="w-full h-full object-cover"
+                            className="w-full h-full object-contain"
                           />
                           <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-md bg-black/80 backdrop-blur-sm border border-white/15 text-[11px] font-bold text-white flex items-center gap-1.5">
                             <span
@@ -1981,20 +1981,20 @@ export default function App() {
                             </span>
                           </div>
                         </div>
-                      )
-                    ) : (
-                      <div className="relative w-full h-full">
-                        <img
-                          src={uploadedImage}
-                          alt="Selected truck ready for AI upfit"
-                          className="w-full h-full object-cover"
-                        />
-                        <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-md bg-black/80 backdrop-blur-sm border border-white/15 text-[11px] font-semibold text-gray-200">
-                          Original Truck (Ready for AI Flatbed Fitment)
+                      ) : (
+                        <div className="relative w-full h-full flex items-center justify-center">
+                          <img
+                            src={uploadedImage}
+                            alt="Selected truck ready for AI upfit"
+                            className="w-full h-full object-contain"
+                          />
+                          <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-md bg-black/80 backdrop-blur-sm border border-white/15 text-[11px] font-semibold text-gray-200">
+                            Original Truck (Ready for AI Flatbed Fitment)
+                          </div>
                         </div>
-                      </div>
-                    )}
-                  </div>
+                      )}
+                    </div>
+                  )}
 
                   {isRenderOutdated && !isAiGenerating && (
                     <div className="mt-2.5 px-3 py-2 rounded-lg bg-[#FC5716]/15 border border-[#FC5716]/40 text-xs text-[#FC5716] font-medium flex items-center justify-between gap-2">
