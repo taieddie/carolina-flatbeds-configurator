@@ -1907,21 +1907,21 @@ export default function App() {
                   {/* Live AI Render Viewport (Zero Cropping across 4:3, 16:10, and 16:9 Truck Photos) */}
                   {aiGeneratedImage && !isAiGenerating && previewViewMode === 'split' ? (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
-                      <div className="relative rounded-xl overflow-hidden border border-[#2e2e2e] bg-[#0a0a0a] aspect-[16/10] flex items-center justify-center">
+                      <div className="relative rounded-xl overflow-hidden border border-[#2e2e2e] bg-[#0a0a0a] flex items-center justify-center">
                         <img
                           src={uploadedImage || ''}
                           alt="Original pickup truck"
-                          className="w-full h-full object-contain"
+                          className="w-full h-auto max-h-[440px] object-contain block"
                         />
                         <span className="absolute bottom-2.5 left-2.5 px-2.5 py-1 rounded bg-black/80 text-xs font-bold text-gray-200 border border-white/15">
                           BEFORE
                         </span>
                       </div>
-                      <div className="relative rounded-xl overflow-hidden border border-[#2e2e2e] bg-[#0a0a0a] aspect-[16/10] flex items-center justify-center">
+                      <div className="relative rounded-xl overflow-hidden border border-[#2e2e2e] bg-[#0a0a0a] flex items-center justify-center">
                         <img
                           src={aiGeneratedImage}
                           alt="AI generated DD Fab flatbed"
-                          className="w-full h-full object-contain"
+                          className="w-full h-auto max-h-[440px] object-contain block"
                         />
                         <span className="absolute bottom-2.5 left-2.5 px-2.5 py-1 rounded bg-[#FC5716] text-xs font-bold text-black">
                           AFTER (DD FAB)
