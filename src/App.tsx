@@ -335,7 +335,8 @@ export default function App() {
   const [aiStepText, setAiStepText] = useState<string>('Removing factory pickup bed...');
   const [aiError, setAiError] = useState<string | null>(null);
   const [previewViewMode, setPreviewViewMode] = useState<'after' | 'before' | 'split'>('after');
-  const [uploadedAspectRatio, setUploadedAspectRatio] = useState<string>('3:2');
+  const [uploadedAspectRatio, setUploadedAspectRatio] = useState<string>('16:9');
+  const [hasUserSelectedModel, setHasUserSelectedModel] = useState<boolean>(false);
 
   // Quote form state
   const [isQuoteFormOpen, setIsQuoteFormOpen] = useState<boolean>(false);
@@ -631,6 +632,7 @@ export default function App() {
           generateRequestIdRef.current += 1;
           setIsAiGenerating(false);
           setUploadedAspectRatio(computeClosestAspectRatio(targetW, targetH));
+          setHasUserSelectedModel(false);
           setUploadedImage(sanitizedDataUrl);
           setActiveSampleId(null);
           setAiGeneratedImage(null);
@@ -672,7 +674,8 @@ export default function App() {
     setAiError(null);
     setActiveSampleId(sample.id);
     setUploadedImage(sample.beforeImage);
-    setUploadedAspectRatio('3:2');
+    setHasUserSelectedModel(true);
+    setUploadedAspectRatio(sample.beforeImage.includes('stock_ram_2500') ? '3:2' : '16:9');
     setTruckYear(sample.year);
     setTruckMakeModel(sample.makeModel);
     setCustomMakeModel('');
@@ -1136,11 +1139,13 @@ export default function App() {
                         onChange={(e) => {
                           const val = e.target.value;
                           setTruckMakeModel(val);
+                          setHasUserSelectedModel(true);
                           if (activeSampleId !== null) {
                             const matchedSample = SAMPLE_TRUCKS.find((s) => s.makeModel === val);
                             if (matchedSample) {
                               setActiveSampleId(matchedSample.id);
                               setUploadedImage(matchedSample.beforeImage);
+                              setUploadedAspectRatio(matchedSample.beforeImage.includes('stock_ram_2500') ? '3:2' : '16:9');
                               setBedLength(matchedSample.bedLength);
                             }
                           }
@@ -1165,7 +1170,10 @@ export default function App() {
                       <select
                         id="truck-year"
                         value={truckYear}
-                        onChange={(e) => setTruckYear(e.target.value)}
+                        onChange={(e) => {
+                          setTruckYear(e.target.value);
+                          setHasUserSelectedModel(true);
+                        }}
                         className="w-full bg-[#1a1a1a] border border-[#333333] focus:border-[#FC5716] rounded-lg px-3.5 py-2.5 text-sm text-white font-medium outline-none transition"
                       >
                         {TRUCK_YEARS.map((yr) => (
@@ -2023,7 +2031,9 @@ export default function App() {
                     </p>
                     <div className="flex flex-wrap gap-1.5">
                       <span className="px-2.5 py-1 rounded-md bg-[#222222] text-xs font-semibold text-white">
-                        {truckYear} {resolvedTruckName}
+                        {activeSampleId === null && !hasUserSelectedModel
+                          ? 'Custom Uploaded Truck'
+                          : `${truckYear} ${resolvedTruckName}`}
                       </span>
                       {showPrices && (
                         <span className="px-2.5 py-1 rounded-md bg-[#222222] text-xs font-semibold text-gray-200">
