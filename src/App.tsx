@@ -337,9 +337,11 @@ export default function App() {
   const [previewViewMode, setPreviewViewMode] = useState<'after' | 'before' | 'split'>('after');
   const [uploadedAspectRatio, setUploadedAspectRatio] = useState<string>('16:9');
   const [hasUserSelectedModel, setHasUserSelectedModel] = useState<boolean>(false);
+  const [isConvertingHeic, setIsConvertingHeic] = useState<boolean>(false);
 
   // Quote form state
   const [isQuoteFormOpen, setIsQuoteFormOpen] = useState<boolean>(false);
+  const [isSubmittingQuote, setIsSubmittingQuote] = useState<boolean>(false);
   const [quoteSubmitted, setQuoteSubmitted] = useState<boolean>(false);
   const [submittedRefId, setSubmittedRefId] = useState<string>('');
   const [submittedSummaryText, setSubmittedSummaryText] = useState<string>('');
@@ -399,6 +401,11 @@ export default function App() {
     truckMakeModel === 'Other / Custom Model'
       ? customMakeModel.trim() || 'Custom Pickup Truck'
       : truckMakeModel;
+
+  const displayTruckLabel =
+    activeSampleId === null && !hasUserSelectedModel
+      ? 'Custom Uploaded Truck'
+      : `${truckYear} ${resolvedTruckName}`;
 
   const wheelConfigLabel =
     wheelConfig === 'srw'
@@ -572,8 +579,8 @@ export default function App() {
     );
   };
 
-  // Process uploaded image file (Fail-closed EXIF-stripping canvas re-encode)
-  const processImageFile = (file: File) => {
+  // Process uploaded image file (Fail-closed EXIF-stripping canvas re-encode + lazy iPhone HEIC conversion)
+  const processImageFile = async (file: File) => {
     setUploadError(null);
     setAiError(null);
 
@@ -584,11 +591,34 @@ export default function App() {
     }
 
     const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    const isHeic =
+      file.type === 'image/heic' ||
+      file.type === 'image/heif' ||
+      /\.(heic|heif)$/i.test(file.name || '');
     const hasAllowedExt = /\.(jpe?g|png|webp)$/i.test(file.name || '');
-    if (!allowedMimeTypes.includes(file.type) && !(file.type === '' && hasAllowedExt)) {
-      setUploadError('Unsupported format. Please upload a JPG, PNG, or WebP photo.');
+    if (!allowedMimeTypes.includes(file.type) && !isHeic && !(file.type === '' && hasAllowedExt)) {
+      setUploadError('Unsupported format. Please upload a JPG, PNG, WebP, or iPhone HEIC photo.');
       if (fileInputRef.current) fileInputRef.current.value = '';
       return;
+    }
+
+    let sourceBlob: Blob = file;
+    if (isHeic) {
+      setIsConvertingHeic(true);
+      try {
+        const heic2anyMod = await import('heic2any');
+        const convert =
+          heic2anyMod.default ||
+          (heic2anyMod as unknown as (opts: { blob: Blob; toType: string; quality: number }) => Promise<Blob | Blob[]>);
+        const converted = await convert({ blob: file, toType: 'image/jpeg', quality: 0.9 });
+        sourceBlob = Array.isArray(converted) ? converted[0] : converted;
+      } catch {
+        setUploadError('Could not convert HEIC photo. Please try saving as JPG or PNG and uploading again.');
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        return;
+      } finally {
+        setIsConvertingHeic(false);
+      }
     }
 
     const reader = new FileReader();
@@ -649,7 +679,7 @@ export default function App() {
       };
       img.src = rawDataUrl;
     };
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(sourceBlob);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -770,7 +800,7 @@ export default function App() {
             .join(', ')
         : 'DD Fab headache rack & LED lighting';
 
-    setAiStepText(`Removing factory pickup bed on your ${truckYear} ${resolvedTruckName}...`);
+    setAiStepText(`Removing factory pickup bed on your ${displayTruckLabel}...`);
 
     const timer1 = setTimeout(() => {
       setAiStepText(`Installing ${bedStyleLabel} with ${deckTypeLabel}...`);
@@ -780,13 +810,27 @@ export default function App() {
       setAiStepText(`Fitting ${addOnSummary}...`);
     }, 2900);
 
+    const timer3 = setTimeout(() => {
+      setAiStepText('Verifying brake lights, mudflaps & fitment...');
+    }, 8500);
+
+    const timer4 = setTimeout(() => {
+      setAiStepText('Refining final details for best realism...');
+    }, 16500);
+
+    const clearProgressTimers = () => {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      clearTimeout(timer3);
+      clearTimeout(timer4);
+    };
+
     try {
       // Fast path when sample truck matches an exact pre-verified render combination
       const exactSampleMatch = getExactPreRenderedSampleMatch();
       if (exactSampleMatch) {
         await new Promise((r) => setTimeout(r, 1400));
-        clearTimeout(timer1);
-        clearTimeout(timer2);
+        clearProgressTimers();
         setAiGeneratedImage(exactSampleMatch);
         setRenderedConfigKey(currentConfigKey);
         setRenderedSummaryLabel(`${bedStyleLabel} (${deckTypeLabel})`);
@@ -841,17 +885,24 @@ export default function App() {
           deckType,
           addOns: selectedAddOns,
           dRingCount,
-          extraInstalls: selectedExtraInstalls
+          extraInstalls: selectedExtraInstalls,
+          debug: typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('live') === '1'
         })
       });
 
-      clearTimeout(timer1);
-      clearTimeout(timer2);
+      clearProgressTimers();
 
       if (reqId !== generateRequestIdRef.current) return;
 
       if (!response.ok) {
-        throw new Error('AI generator is currently busy. Please click Generate AI Flatbed Preview to retry.');
+        let serverMsg = 'AI generator is currently busy. Please click Generate AI Flatbed Preview to retry.';
+        try {
+          const errBody = await response.json();
+          if (errBody?.error) serverMsg = errBody.error;
+        } catch {
+          // Use default message
+        }
+        throw new Error(serverMsg);
       }
 
       const data = await response.json();
@@ -865,8 +916,7 @@ export default function App() {
         throw new Error(data.error || 'No image returned from AI generator. Please try again.');
       }
     } catch (err: any) {
-      clearTimeout(timer1);
-      clearTimeout(timer2);
+      clearProgressTimers();
       if (err?.name === 'AbortError' || reqId !== generateRequestIdRef.current) return;
       setAiError(
         err.message || 'Could not complete AI preview. Please click Generate AI Flatbed Preview to retry.'
@@ -976,28 +1026,44 @@ export default function App() {
 
     try {
       const existing = JSON.parse(localStorage.getItem('cfb_quote_inquiries') || '[]');
+      const { aiPreviewImage: _a, uploadedTruckImage: _u, ...lightweightInquiry } = inquiryPayload;
       localStorage.setItem(
         'cfb_quote_inquiries',
-        JSON.stringify([inquiryPayload, ...existing.slice(0, 29)])
+        JSON.stringify([lightweightInquiry, ...existing.slice(0, 29)])
       );
     } catch {
       // Ignore storage quota errors
     }
 
+    if (isSubmittingQuote) return;
+    setIsSubmittingQuote(true);
     try {
-      await fetch('https://cfb-ai-generator.tek123168.workers.dev', {
+      const isTest =
+        typeof window !== 'undefined' &&
+        (new URLSearchParams(window.location.search).get('test') === '1' ||
+          new URLSearchParams(window.location.search).get('is_test') === '1');
+      const res = await fetch('https://cfb-ai-generator.tek123168.workers.dev', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'submit-quote',
+          isTest,
           ...inquiryPayload
         })
       });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        setValidationError(
+          errData?.error || 'Could not submit your quote right now. Please try again in a moment.'
+        );
+        return;
+      }
+      setQuoteSubmitted(true);
     } catch {
-      // Offline / local fallback already saved
+      setValidationError('Network error submitting quote. Please check your connection and try again.');
+    } finally {
+      setIsSubmittingQuote(false);
     }
-
-    setQuoteSubmitted(true);
   };
 
   // All selected add-on pill labels
@@ -1342,7 +1408,7 @@ export default function App() {
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept="image/jpeg,image/png,image/webp"
+                    accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif"
                     onChange={handleFileUpload}
                     className="hidden"
                   />
@@ -1355,7 +1421,7 @@ export default function App() {
                         className="w-full h-full object-contain"
                       />
                       <span className="absolute bottom-2 left-2 px-2 py-0.5 rounded bg-black/80 text-[10px] font-semibold text-gray-200 border border-white/15">
-                        {truckYear} {resolvedTruckName}
+                        {displayTruckLabel}
                       </span>
                     </div>
                   ) : (
@@ -1371,13 +1437,15 @@ export default function App() {
                     <div className="inline-flex items-center justify-center gap-1.5 text-xs sm:text-sm font-bold text-white">
                       <Camera className="w-4 h-4 text-[#FC5716] shrink-0" />
                       <span>
-                        {uploadedImage
+                        {isConvertingHeic
+                          ? 'Converting iPhone HEIC Photo...'
+                          : uploadedImage
                           ? 'Upload Your Own Truck Photo Instead'
                           : 'Click or Drag & Drop Your Truck Photo Here'}
                       </span>
                     </div>
                     <p className="text-[11px] text-gray-400 mt-0.5">
-                      Side or rear three-quarter angle works best (JPG, PNG, or WebP up to 10MB)
+                      Best results: rear 3/4 angle showing side & back (JPG, PNG, WebP, or iPhone HEIC up to 10MB)
                     </p>
                   </div>
                 </div>
@@ -2031,9 +2099,7 @@ export default function App() {
                     </p>
                     <div className="flex flex-wrap gap-1.5">
                       <span className="px-2.5 py-1 rounded-md bg-[#222222] text-xs font-semibold text-white">
-                        {activeSampleId === null && !hasUserSelectedModel
-                          ? 'Custom Uploaded Truck'
-                          : `${truckYear} ${resolvedTruckName}`}
+                        {displayTruckLabel}
                       </span>
                       {showPrices && (
                         <span className="px-2.5 py-1 rounded-md bg-[#222222] text-xs font-semibold text-gray-200">
@@ -2332,9 +2398,10 @@ export default function App() {
 
                     <button
                       type="submit"
-                      className="w-full py-3.5 px-4 rounded-xl bg-[#FC5716] hover:bg-[#ff682b] text-black font-heading font-bold text-base tracking-wide shadow-lg shadow-[#FC5716]/25 transition cursor-pointer flex items-center justify-center gap-2"
+                      disabled={isSubmittingQuote}
+                      className="w-full py-3.5 px-4 rounded-xl bg-[#FC5716] hover:bg-[#ff682b] disabled:opacity-60 disabled:cursor-not-allowed text-black font-heading font-bold text-base tracking-wide shadow-lg shadow-[#FC5716]/25 transition cursor-pointer flex items-center justify-center gap-2"
                     >
-                      <span>Submit Quote Request</span>
+                      <span>{isSubmittingQuote ? 'Submitting Quote Request...' : 'Submit Quote Request'}</span>
                       <ArrowRight className="w-4 h-4" />
                     </button>
                   </form>
