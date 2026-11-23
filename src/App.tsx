@@ -361,6 +361,8 @@ export default function App() {
   const quoteSectionRef = useRef<HTMLDivElement>(null);
   const generateAbortRef = useRef<AbortController | null>(null);
   const generateRequestIdRef = useRef<number>(0);
+  const isSubmittingQuoteRef = useRef<boolean>(false);
+  const quoteSessionRefIdRef = useRef<string | null>(null);
 
   const computeClosestAspectRatio = (w: number, h: number): string => {
     const ratio = w / Math.max(1, h);
@@ -831,6 +833,7 @@ export default function App() {
       if (exactSampleMatch) {
         await new Promise((r) => setTimeout(r, 1400));
         clearProgressTimers();
+        if (reqId !== generateRequestIdRef.current) return;
         setAiGeneratedImage(exactSampleMatch);
         setRenderedConfigKey(currentConfigKey);
         setRenderedSummaryLabel(`${bedStyleLabel} (${deckTypeLabel})`);
@@ -930,6 +933,7 @@ export default function App() {
 
   // Open & scroll to the Quote Request Card (accounting for 64px sticky header + 16px margin)
   const handleOpenQuoteRequest = () => {
+    quoteSessionRefIdRef.current = 'CFB-' + Date.now().toString().slice(-6);
     setIsQuoteFormOpen(true);
     requestAnimationFrame(() => {
       setTimeout(() => {
@@ -944,6 +948,7 @@ export default function App() {
   // Submit Quote Request
   const handleQuoteSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmittingQuoteRef.current) return;
     setValidationError(null);
 
     if (formData.name.trim().length < 2) {
@@ -960,7 +965,8 @@ export default function App() {
       return;
     }
 
-    const refId = 'CFB-' + Date.now().toString().slice(-6);
+    const refId = quoteSessionRefIdRef.current || ('CFB-' + Date.now().toString().slice(-6));
+    quoteSessionRefIdRef.current = refId;
     setSubmittedRefId(refId);
 
     const selectedAddOnNames = [
@@ -976,7 +982,7 @@ export default function App() {
       (d) => `${d.label} (-$${d.amount})`
     );
 
-    const summarySnapshot = `${truckYear} ${resolvedTruckName} (${bedStyleLabel}, ${deckTypeLabel}${
+    const summarySnapshot = `${displayTruckLabel} (${bedStyleLabel}, ${deckTypeLabel}${
       selectedAddOnNames.length > 0 ? ' + ' + selectedAddOnNames.join(', ') : ''
     })`;
     setSubmittedSummaryText(summarySnapshot);
@@ -1035,7 +1041,7 @@ export default function App() {
       // Ignore storage quota errors
     }
 
-    if (isSubmittingQuote) return;
+    isSubmittingQuoteRef.current = true;
     setIsSubmittingQuote(true);
     try {
       const isTest =
@@ -1058,10 +1064,12 @@ export default function App() {
         );
         return;
       }
+      quoteSessionRefIdRef.current = null;
       setQuoteSubmitted(true);
     } catch {
       setValidationError('Network error submitting quote. Please check your connection and try again.');
     } finally {
+      isSubmittingQuoteRef.current = false;
       setIsSubmittingQuote(false);
     }
   };
