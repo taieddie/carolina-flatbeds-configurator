@@ -725,47 +725,10 @@ export default function App() {
     setQuoteSubmitted(false);
   };
 
-  // Check if current sample selection matches an exact pre-verified instant studio render
+  // Always generate live via the Cloudflare Worker so every sample truck and custom upload
+  // reflects the latest DD Fab hardware references (reverse light bars, ddfab.co mudflaps)
+  // and returns a base64 AI preview attachment for quote emails.
   const getExactPreRenderedSampleMatch = (): string | null => {
-    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('live') === '1') {
-      return null;
-    }
-    if (!uploadedImage || selectedAddOns.length > 0 || wheelConfig !== 'srw') return null;
-    const activeSample = SAMPLE_TRUCKS.find((s) => s.id === activeSampleId);
-    if (
-      !activeSample ||
-      bedLength !== activeSample.bedLength ||
-      truckMakeModel !== activeSample.makeModel
-    ) {
-      return null;
-    }
-
-    if (uploadedImage.includes('stock_f250')) {
-      if (bedStyle === 'standard' && deckType === 'wood') return './assets/f250_heritage_wood.jpg';
-      if (bedStyle === 'standard' && deckType === 'steel') return './assets/f250_standard_work.jpg';
-      if (bedStyle === 'full-skirted' && deckType === 'steel') return './assets/f250_lora_inpaint.jpg';
-    }
-    if (
-      uploadedImage.includes('stock_silverado_2500hd') &&
-      bedStyle === 'standard' &&
-      deckType === 'wood'
-    ) {
-      return './assets/after_silverado_heritage_wood.jpg';
-    }
-    if (
-      uploadedImage.includes('stock_sierra_2500hd') &&
-      bedStyle === 'standard' &&
-      deckType === 'steel'
-    ) {
-      return './assets/after_sierra_standard_utility.jpg';
-    }
-    if (
-      uploadedImage.includes('stock_ram_2500') &&
-      bedStyle === 'full-skirted' &&
-      deckType === 'steel'
-    ) {
-      return './assets/after_ram_deluxe_skirted.jpg';
-    }
     return null;
   };
 
