@@ -2044,6 +2044,12 @@ export default function App() {
                     </div>
                   )}
 
+                  {aiGeneratedImage && !isAiGenerating && (
+                    <p className="mt-2 text-[11px] sm:text-xs text-gray-400 text-center">
+                      AI visual preview - final specs and hardware are confirmed on your quote.
+                    </p>
+                  )}
+
                   {isRenderOutdated && !isAiGenerating && (
                     <div className="mt-2.5 px-3 py-2 rounded-lg bg-[#FC5716]/15 border border-[#FC5716]/40 text-xs text-[#FC5716] font-medium flex items-center justify-between gap-2">
                       <span>Options changed - click Re-Run AI Preview to refresh your truck</span>
