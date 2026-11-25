@@ -930,9 +930,15 @@ export default function App() {
     }
   };
 
+  const createQuoteSessionRefId = () =>
+    'CFB-' +
+    (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase()
+      : `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`.slice(-8).toUpperCase());
+
   // Open & scroll to the Quote Request Card (accounting for 64px sticky header + 16px margin)
   const handleOpenQuoteRequest = () => {
-    quoteSessionRefIdRef.current = 'CFB-' + Date.now().toString().slice(-6);
+    quoteSessionRefIdRef.current = createQuoteSessionRefId();
     setIsQuoteFormOpen(true);
     requestAnimationFrame(() => {
       setTimeout(() => {
@@ -964,12 +970,7 @@ export default function App() {
       return;
     }
 
-    const refId =
-      quoteSessionRefIdRef.current ||
-      'CFB-' +
-        (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-          ? crypto.randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase()
-          : Date.now().toString(36).toUpperCase());
+    const refId = quoteSessionRefIdRef.current || createQuoteSessionRefId();
     quoteSessionRefIdRef.current = refId;
     setSubmittedRefId(refId);
 
