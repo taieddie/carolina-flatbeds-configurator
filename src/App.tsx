@@ -405,13 +405,7 @@ export default function App() {
     const candidates: Array<{ label: string; val: number }> = [
       { label: '16:9', val: 16 / 9 },
       { label: '3:2', val: 3 / 2 },
-      { label: '4:3', val: 4 / 3 },
-      { label: '5:4', val: 5 / 4 },
-      { label: '1:1', val: 1 },
-      { label: '4:5', val: 4 / 5 },
-      { label: '3:4', val: 3 / 4 },
-      { label: '2:3', val: 2 / 3 },
-      { label: '9:16', val: 9 / 16 }
+      { label: '4:3', val: 4 / 3 }
     ];
     let best = candidates[0];
     let minDiff = Math.abs(ratio - best.val);
@@ -423,6 +417,187 @@ export default function App() {
       }
     }
     return best.label;
+  };
+
+  // Normalize vertical portrait phone photos and phone screenshots into a single 4:3+ landscape truck frame
+  const cropToLandscapeTruckFrame = (sourceCanvas: HTMLCanvasElement): HTMLCanvasElement => {
+    const w = sourceCanvas.width;
+    const h = sourceCanvas.height;
+    if (w < 32 || h < 32) return sourceCanvas;
+    const srcCtx = sourceCanvas.getContext('2d');
+    if (!srcCtx) return sourceCanvas;
+
+    const imgData = srcCtx.getImageData(0, 0, w, h).data;
+    const xStart = Math.floor(w * 0.08);
+    const xEnd = Math.max(xStart + 1, Math.ceil(w * 0.92));
+    const xStep = Math.max(1, Math.floor((xEnd - xStart) / 64));
+
+    const rowMean = new Float32Array(h);
+    const rowMaxChannelStd = new Float32Array(h);
+    const rowEdgeEnergy = new Float32Array(h);
+
+    const exStart = Math.floor(w * 0.12);
+    const exEnd = Math.max(exStart + 2, Math.ceil(w * 0.88));
+    const exStep = Math.max(1, Math.floor((exEnd - exStart) / 80));
+
+    for (let y = 0; y < h; y++) {
+      let sumR = 0;
+      let sumG = 0;
+      let sumB = 0;
+      let sumSqR = 0;
+      let sumSqG = 0;
+      let sumSqB = 0;
+      let sumL = 0;
+      let count = 0;
+      const rowOffset = y * w * 4;
+
+      for (let x = xStart; x < xEnd; x += xStep) {
+        const idx = rowOffset + x * 4;
+        const r = imgData[idx];
+        const g = imgData[idx + 1];
+        const b = imgData[idx + 2];
+        sumR += r;
+        sumG += g;
+        sumB += b;
+        sumSqR += r * r;
+        sumSqG += g * g;
+        sumSqB += b * b;
+        sumL += 0.299 * r + 0.587 * g + 0.114 * b;
+        count++;
+      }
+
+      if (count > 0) {
+        rowMean[y] = sumL / count;
+        const varR = Math.max(0, sumSqR / count - (sumR / count) ** 2);
+        const varG = Math.max(0, sumSqG / count - (sumG / count) ** 2);
+        const varB = Math.max(0, sumSqB / count - (sumB / count) ** 2);
+        rowMaxChannelStd[y] = Math.sqrt(Math.max(varR, varG, varB));
+      }
+
+      let edgeSum = 0;
+      let edgeCount = 0;
+      const prevRowOffset = Math.max(0, y - 1) * w * 4;
+      for (let x = exStart + exStep; x < exEnd; x += exStep) {
+        const idx = rowOffset + x * 4;
+        const leftIdx = rowOffset + (x - exStep) * 4;
+        const upIdx = prevRowOffset + x * 4;
+        const lum = 0.299 * imgData[idx] + 0.587 * imgData[idx + 1] + 0.114 * imgData[idx + 2];
+        const lumL =
+          0.299 * imgData[leftIdx] + 0.587 * imgData[leftIdx + 1] + 0.114 * imgData[leftIdx + 2];
+        const lumU = 0.299 * imgData[upIdx] + 0.587 * imgData[upIdx + 1] + 0.114 * imgData[upIdx + 2];
+        edgeSum += Math.abs(lum - lumL) + Math.abs(lum - lumU);
+        edgeCount++;
+      }
+      rowEdgeEnergy[y] = edgeCount > 0 ? edgeSum / edgeCount : 0;
+    }
+
+    // Pass 1: Phone-screenshot letterbox & status/nav bar trim scanning outward from peak-activity truck row
+    let anchorY = Math.floor(h * 0.5);
+    const bandHalf = Math.max(6, Math.floor(h * 0.03));
+    const searchMinY = Math.floor(h * 0.15);
+    const searchMaxY = Math.ceil(h * 0.85);
+    let peakBandScore = -1;
+    for (let y = searchMinY; y <= searchMaxY; y++) {
+      let sum = 0;
+      const b0 = Math.max(0, y - bandHalf);
+      const b1 = Math.min(h - 1, y + bandHalf);
+      for (let by = b0; by <= b1; by++) sum += rowEdgeEnergy[by];
+      const weight = 1 - 0.15 * Math.abs(y / h - 0.5);
+      const score = (sum / Math.max(1, b1 - b0 + 1)) * weight;
+      if (score > peakBandScore) {
+        peakBandScore = score;
+        anchorY = y;
+      }
+    }
+
+    let yTop = 0;
+    let yBottom = h - 1;
+
+    let flatRunUp = 0;
+    let runBottomRow = anchorY;
+    for (let y = anchorY; y >= 0; y--) {
+      const meanDelta = y + 1 < h ? Math.abs(rowMean[y] - rowMean[y + 1]) : 0;
+      const isFlatUiRow = rowMaxChannelStd[y] < 10 && meanDelta < 4;
+      if (isFlatUiRow) {
+        if (flatRunUp === 0) runBottomRow = y;
+        flatRunUp++;
+        if (flatRunUp >= 8) {
+          yTop = Math.min(runBottomRow + 1, anchorY);
+          break;
+        }
+      } else {
+        flatRunUp = 0;
+      }
+    }
+
+    let flatRunDown = 0;
+    let runTopRow = anchorY;
+    for (let y = anchorY; y < h; y++) {
+      const meanDelta = y > 0 ? Math.abs(rowMean[y] - rowMean[y - 1]) : 0;
+      const isFlatUiRow = rowMaxChannelStd[y] < 10 && meanDelta < 4;
+      if (isFlatUiRow) {
+        if (flatRunDown === 0) runTopRow = y;
+        flatRunDown++;
+        if (flatRunDown >= 8) {
+          yBottom = Math.max(runTopRow - 1, anchorY);
+          break;
+        }
+      } else {
+        flatRunDown = 0;
+      }
+    }
+
+    let trimTop = 0;
+    let trimBottom = h - 1;
+    const candidateTrimH = yBottom - yTop + 1;
+    if (candidateTrimH >= Math.round(w * 0.42)) {
+      trimTop = yTop;
+      trimBottom = yBottom;
+    }
+
+    // Pass 2: Auto-frame portrait or square truck uploads (height > 0.82 * width) to horizontal 4:3
+    const trimW = w;
+    const trimH = trimBottom - trimTop + 1;
+    let finalTop = trimTop;
+    let finalH = trimH;
+
+    if (trimH > trimW * 0.82) {
+      const targetH = Math.min(trimH, Math.round(trimW * 0.75));
+      const prefix = new Float64Array(h + 1);
+      for (let y = 0; y < h; y++) {
+        prefix[y + 1] = prefix[y] + rowEdgeEnergy[y];
+      }
+
+      let bestScore = -1;
+      let bestTop = trimTop + Math.floor((trimH - targetH) / 2);
+      const maxWinTop = trimTop + trimH - targetH;
+      for (let winY = trimTop; winY <= maxWinTop; winY++) {
+        const energy = prefix[winY + targetH] - prefix[winY];
+        const winCenterNorm = (winY + targetH / 2 - trimTop) / Math.max(1, trimH);
+        const centerWeight = 1 - 0.25 * Math.abs(winCenterNorm - 0.52);
+        const score = energy * centerWeight;
+        if (score > bestScore) {
+          bestScore = score;
+          bestTop = winY;
+        }
+      }
+      finalTop = bestTop;
+      finalH = targetH;
+    }
+
+    if (finalTop === 0 && finalH === h) {
+      return sourceCanvas;
+    }
+
+    const croppedCanvas = document.createElement('canvas');
+    croppedCanvas.width = trimW;
+    croppedCanvas.height = finalH;
+    const croppedCtx = croppedCanvas.getContext('2d');
+    if (!croppedCtx) return sourceCanvas;
+    croppedCtx.fillStyle = '#ffffff';
+    croppedCtx.fillRect(0, 0, trimW, finalH);
+    croppedCtx.drawImage(sourceCanvas, 0, finalTop, trimW, finalH, 0, 0, trimW, finalH);
+    return croppedCanvas;
   };
 
   const scrollToSection = (el: HTMLElement | null) => {
@@ -695,11 +870,14 @@ export default function App() {
           ctx.fillStyle = '#ffffff';
           ctx.fillRect(0, 0, targetW, targetH);
           ctx.drawImage(img, 0, 0, targetW, targetH);
-          const sanitizedDataUrl = canvas.toDataURL('image/jpeg', 0.92);
+          const normalizedCanvas = cropToLandscapeTruckFrame(canvas);
+          const sanitizedDataUrl = normalizedCanvas.toDataURL('image/jpeg', 0.92);
           generateAbortRef.current?.abort();
           generateRequestIdRef.current += 1;
           setIsAiGenerating(false);
-          setUploadedAspectRatio(computeClosestAspectRatio(targetW, targetH));
+          setUploadedAspectRatio(
+            computeClosestAspectRatio(normalizedCanvas.width, normalizedCanvas.height)
+          );
           setHasUserSelectedModel(false);
           setUploadedImage(sanitizedDataUrl);
           setActiveSampleId(null);
@@ -2101,13 +2279,13 @@ export default function App() {
                             }
                             className="w-full h-full object-contain"
                           />
-                          <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-md bg-black/80 backdrop-blur-sm border border-white/15 text-[11px] font-bold text-white flex items-center gap-1.5">
+                          <div className="absolute top-2 left-2 sm:top-2.5 sm:left-2.5 max-w-[calc(100%-1.25rem)] px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md bg-black/80 backdrop-blur-sm border border-white/15 text-[10px] sm:text-[11px] leading-tight font-bold text-white flex items-center gap-1.5">
                             <span
-                              className={`w-2 h-2 rounded-full ${
+                              className={`w-2 h-2 rounded-full shrink-0 ${
                                 previewViewMode === 'before' ? 'bg-gray-400' : 'bg-[#FC5716]'
                               }`}
                             />
-                            <span>
+                            <span className="truncate">
                               {previewViewMode === 'before'
                                 ? 'Original Truck Photo'
                                 : `AI Render: ${renderedSummaryLabel || `${bedStyleLabel} (${deckTypeLabel})`}`}
@@ -2121,7 +2299,7 @@ export default function App() {
                             alt="Selected truck ready for AI upfit"
                             className="w-full h-full object-contain"
                           />
-                          <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-md bg-black/80 backdrop-blur-sm border border-white/15 text-[11px] font-semibold text-gray-200">
+                          <div className="absolute top-2 left-2 sm:top-2.5 sm:left-2.5 max-w-[calc(100%-1.25rem)] px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-md bg-black/80 backdrop-blur-sm border border-white/15 text-[10px] sm:text-[11px] leading-tight font-semibold text-gray-200 truncate">
                             Original Truck (Ready for AI Flatbed Fitment)
                           </div>
                         </div>

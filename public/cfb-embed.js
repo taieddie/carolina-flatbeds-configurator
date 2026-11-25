@@ -9,6 +9,7 @@ class CfbVisualizerElement extends HTMLElement {
     const iframe = document.createElement('iframe');
     const embedUrl = new URL('https://cfb-ai-generator.tek123168.workers.dev/');
     embedUrl.searchParams.set('embed', '1');
+    embedUrl.searchParams.set('v', '2');
     try {
       const hostParams = new URLSearchParams(window.location.search);
       if (hostParams.get('test') === '1') embedUrl.searchParams.set('test', '1');
