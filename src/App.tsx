@@ -398,8 +398,13 @@ export default function App() {
   const generateAbortRef = useRef<AbortController | null>(null);
   const generateRequestIdRef = useRef<number>(0);
   const uploadRequestIdRef = useRef<number>(0);
+  const quoteAbortRef = useRef<AbortController | null>(null);
   const isSubmittingQuoteRef = useRef<boolean>(false);
   const quoteSessionRefIdRef = useRef<string | null>(null);
+  const isTestMode =
+    typeof window !== 'undefined' &&
+    (new URLSearchParams(window.location.search).get('test') === '1' ||
+      new URLSearchParams(window.location.search).get('is_test') === '1');
 
   const computeClosestAspectRatio = (w: number, h: number): string => {
     const ratio = w / Math.max(1, h);
@@ -636,13 +641,14 @@ export default function App() {
   const deckTypeLabel =
     deckType === 'wood' ? 'Wood Deck' : deckType === 'trex' ? 'Trex Deck' : 'Steel Deck';
 
-  const currentConfigKey = `${uploadedImage || ''}|${truckYear}|${resolvedTruckName}|${wheelConfig}|${bedLength}|${bedStyle}|${deckType}|${dRingCount}|${selectedAddOns.slice().sort().join(',')}`;
+  const currentConfigKey = `${uploadedImage || ''}|${truckYear}|${resolvedTruckName}|${wheelConfig}|${bedLength}|${bedStyle}|${deckType}|${dRingCount}|${selectedAddOns.slice().sort().join(',')}|${selectedExtraInstalls.slice().sort().join(',')}|${selectedDeductions.slice().sort().join(',')}`;
   const isRenderOutdated = Boolean(
-    aiGeneratedImage && renderedConfigKey && renderedConfigKey !== currentConfigKey
+    aiGeneratedImage && (!renderedConfigKey || renderedConfigKey !== currentConfigKey)
   );
 
   useEffect(() => {
     if (isRenderOutdated) {
+      quoteAbortRef.current?.abort();
       setIsQuoteFormOpen(false);
       setQuoteSubmitted(false);
     }
@@ -806,6 +812,10 @@ export default function App() {
   const processImageFile = async (file: File) => {
     const uploadReqId = ++uploadRequestIdRef.current;
     setIsConvertingHeic(false);
+    generateAbortRef.current?.abort();
+    generateRequestIdRef.current += 1;
+    setIsAiGenerating(false);
+    quoteAbortRef.current?.abort();
     setUploadError(null);
     setAiError(null);
 
@@ -950,6 +960,7 @@ export default function App() {
     generateAbortRef.current?.abort();
     generateRequestIdRef.current += 1;
     setIsAiGenerating(false);
+    quoteAbortRef.current?.abort();
     setUploadError(null);
     setAiError(null);
     setActiveSampleId(sample.id);
@@ -1265,22 +1276,26 @@ export default function App() {
       // Ignore storage quota errors
     }
 
+    quoteAbortRef.current?.abort();
+    const quoteController = new AbortController();
+    quoteAbortRef.current = quoteController;
     isSubmittingQuoteRef.current = true;
     setIsSubmittingQuote(true);
     try {
-      const isTest =
-        typeof window !== 'undefined' &&
-        (new URLSearchParams(window.location.search).get('test') === '1' ||
-          new URLSearchParams(window.location.search).get('is_test') === '1');
       const res = await fetch('https://cfb-ai-generator.tek123168.workers.dev', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CFB-Test-Mode': isTestMode ? '1' : '0'
+        },
+        signal: quoteController.signal,
         body: JSON.stringify({
           action: 'submit-quote',
-          isTest,
+          isTest: isTestMode,
           ...inquiryPayload
         })
       });
+      if (quoteController.signal.aborted) return;
       const resData = await res.json().catch(() => ({}));
       const hasSkippedAttachments =
         Array.isArray(resData?.skippedAttachments) && resData.skippedAttachments.length > 0;
@@ -1292,9 +1307,13 @@ export default function App() {
       }
       quoteSessionRefIdRef.current = null;
       setQuoteSubmitted(true);
-    } catch {
+    } catch (err: any) {
+      if (err?.name === 'AbortError' || quoteController.signal.aborted) return;
       setValidationError('Network error submitting quote. Please check your connection and try again.');
     } finally {
+      if (quoteAbortRef.current === quoteController) {
+        quoteAbortRef.current = null;
+      }
       isSubmittingQuoteRef.current = false;
       setIsSubmittingQuote(false);
     }
@@ -2525,6 +2544,11 @@ export default function App() {
                     <h3 className="font-heading text-xl font-bold text-white">
                       QUOTE REQUEST RECEIVED ({submittedRefId})
                     </h3>
+                    {isTestMode && (
+                      <div className="inline-block px-3 py-1 rounded-full bg-amber-950/80 border border-amber-600/50 text-[11px] font-semibold text-amber-200">
+                        Test Mode (?test=1): Quote emails route to developer test inbox
+                      </div>
+                    )}
                     <p className="text-xs sm:text-sm text-gray-300 max-w-md mx-auto leading-relaxed">
                       Thank you, <span className="text-white font-semibold">{formData.name}</span>. Carolina Flatbeds has received your{' '}
                       <span className="text-[#FC5716] font-semibold">
@@ -2559,6 +2583,11 @@ export default function App() {
                       <p className="text-xs text-gray-400 mt-0.5">
                         Your selected truck, flatbed style, deck type, add-ons, and AI preview are attached automatically.
                       </p>
+                      {isTestMode && (
+                        <div className="mt-2 inline-block px-2.5 py-1 rounded-md bg-amber-950/80 border border-amber-600/50 text-[11px] font-semibold text-amber-200">
+                          Test Mode (?test=1): Quote emails route to developer test inbox
+                        </div>
+                      )}
                     </div>
 
                     {validationError && (
