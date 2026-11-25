@@ -641,6 +641,13 @@ export default function App() {
     aiGeneratedImage && renderedConfigKey && renderedConfigKey !== currentConfigKey
   );
 
+  useEffect(() => {
+    if (isRenderOutdated) {
+      setIsQuoteFormOpen(false);
+      setQuoteSubmitted(false);
+    }
+  }, [isRenderOutdated]);
+
   // Clean up bed-length-restricted add-ons when switching between Short Bed and Long Bed
   useEffect(() => {
     setSelectedAddOns((prev) =>
@@ -798,6 +805,7 @@ export default function App() {
   // Process uploaded image file (Fail-closed EXIF-stripping canvas re-encode + lazy iPhone HEIC conversion)
   const processImageFile = async (file: File) => {
     const uploadReqId = ++uploadRequestIdRef.current;
+    setIsConvertingHeic(false);
     setUploadError(null);
     setAiError(null);
 
@@ -938,6 +946,7 @@ export default function App() {
   // One-click sample truck loader
   const handleSelectSampleTruck = (sample: SampleTruck) => {
     uploadRequestIdRef.current += 1;
+    setIsConvertingHeic(false);
     generateAbortRef.current?.abort();
     generateRequestIdRef.current += 1;
     setIsAiGenerating(false);
@@ -1147,6 +1156,7 @@ export default function App() {
 
   // Open & scroll to the Quote Request Card (accounting for 64px sticky header + 16px margin)
   const handleOpenQuoteRequest = () => {
+    if (isRenderOutdated) return;
     quoteSessionRefIdRef.current = createQuoteSessionRefId();
     setIsQuoteFormOpen(true);
     requestAnimationFrame(() => {
@@ -1162,7 +1172,7 @@ export default function App() {
   // Submit Quote Request
   const handleQuoteSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isSubmittingQuoteRef.current) return;
+    if (isSubmittingQuoteRef.current || isRenderOutdated) return;
     setValidationError(null);
 
     if (formData.name.trim().length < 2) {
@@ -1240,7 +1250,7 @@ export default function App() {
           totalInstalled: priceBreakdown.totalInstalled
         }
       },
-      aiPreviewImage: aiGeneratedImage,
+      aiPreviewImage: isRenderOutdated ? null : aiGeneratedImage,
       uploadedTruckImage: uploadedImage
     };
 
@@ -2440,15 +2450,11 @@ export default function App() {
 
                   {/* Primary AI Action & Request Quote CTAs (Single primary orange button at all times) */}
                   <div className="flex flex-col gap-2.5">
-                    {aiGeneratedImage && !isQuoteFormOpen && (
+                    {aiGeneratedImage && !isAiGenerating && !isQuoteFormOpen && !isRenderOutdated && (
                       <button
                         type="button"
                         onClick={handleOpenQuoteRequest}
-                        className={`w-full py-3.5 px-4 rounded-xl font-heading font-bold text-base tracking-wide transition flex items-center justify-center gap-2 cursor-pointer ${
-                          isRenderOutdated
-                            ? 'bg-[#1e1e1e] hover:bg-[#282828] text-gray-200 border border-[#3a3a3a]'
-                            : 'bg-[#FC5716] hover:bg-[#ff682b] text-black shadow-lg shadow-[#FC5716]/30 ring-2 ring-[#FC5716]/40'
-                        }`}
+                        className="w-full py-3.5 px-4 rounded-xl font-heading font-bold text-base tracking-wide transition flex items-center justify-center gap-2 cursor-pointer bg-[#FC5716] hover:bg-[#ff682b] text-black shadow-lg shadow-[#FC5716]/30 ring-2 ring-[#FC5716]/40"
                       >
                         <FileText className="w-4 h-4" />
                         <span>Request a Quote for This Setup</span>
