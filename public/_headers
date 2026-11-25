@@ -2,3 +2,8 @@
   Content-Security-Policy: frame-ancestors 'self' https://*.wix.com https://*.wixsite.com https://*.wixstudio.com https://*.editorx.com https://*.filesusr.com https://*.usrfiles.com https://*.carolinaflatbeds.com https://carolinaflatbeds.com https://*.ddfab.co https://ddfab.co https://taieddie.github.io;
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
+
+/cfb-embed.js
+  Access-Control-Allow-Origin: *
+  Content-Type: application/javascript; charset=utf-8
+  Cache-Control: public, max-age=300
