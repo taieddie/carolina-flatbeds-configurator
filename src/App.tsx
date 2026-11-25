@@ -1069,8 +1069,9 @@ export default function App() {
         })
       });
       const resData = await res.json().catch(() => ({}));
-      if (!res.ok || resData?.emailDelivered !== true) {
-        quoteSessionRefIdRef.current = null;
+      const hasSkippedAttachments =
+        Array.isArray(resData?.skippedAttachments) && resData.skippedAttachments.length > 0;
+      if (!res.ok || resData?.emailDelivered !== true || hasSkippedAttachments) {
         setValidationError(
           resData?.error || 'Could not submit your quote right now. Please try submitting again in a moment.'
         );
@@ -1079,7 +1080,6 @@ export default function App() {
       quoteSessionRefIdRef.current = null;
       setQuoteSubmitted(true);
     } catch {
-      quoteSessionRefIdRef.current = null;
       setValidationError('Network error submitting quote. Please check your connection and try again.');
     } finally {
       isSubmittingQuoteRef.current = false;
