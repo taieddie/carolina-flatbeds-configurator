@@ -964,7 +964,12 @@ export default function App() {
       return;
     }
 
-    const refId = quoteSessionRefIdRef.current || ('CFB-' + Date.now().toString().slice(-6));
+    const refId =
+      quoteSessionRefIdRef.current ||
+      'CFB-' +
+        (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+          ? crypto.randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase()
+          : Date.now().toString(36).toUpperCase());
     quoteSessionRefIdRef.current = refId;
     setSubmittedRefId(refId);
 
