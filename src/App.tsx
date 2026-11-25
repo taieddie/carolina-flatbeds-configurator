@@ -332,15 +332,22 @@ export default function App() {
     }
   });
 
+  const rootContainerRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     if (!isEmbedded || typeof window === 'undefined') return;
     const postHeight = () => {
-      const height = document.documentElement.scrollHeight;
-      window.parent.postMessage({ type: 'cfb-resize', height }, '*');
+      const measured = rootContainerRef.current
+        ? Math.ceil(rootContainerRef.current.getBoundingClientRect().height)
+        : document.body.scrollHeight;
+      if (measured > 0) {
+        window.parent.postMessage({ type: 'cfb-resize', height: measured }, '*');
+      }
     };
     postHeight();
     const ro = new ResizeObserver(() => postHeight());
-    ro.observe(document.body);
+    if (rootContainerRef.current) ro.observe(rootContainerRef.current);
+    else ro.observe(document.body);
     window.addEventListener('resize', postHeight);
     return () => {
       ro.disconnect();
@@ -1076,8 +1083,37 @@ export default function App() {
     ...selectedExtraInstalls.map((id) => EXTRA_INSTALL_OPTIONS.find((e) => e.id === id)?.name)
   ].filter(Boolean) as string[];
 
+  const handleDownloadPreview = () => {
+    if (!aiGeneratedImage) return;
+    const ext = aiGeneratedImage.startsWith('data:image/png') ? 'png' : 'jpg';
+    const filename = `carolina-flatbeds-${truckYear}-${bedStyle}-${deckType}.${ext}`;
+    try {
+      const match = aiGeneratedImage.match(/^data:([^;]+);base64,(.+)$/);
+      if (match) {
+        const mime = match[1];
+        const bin = atob(match[2]);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        const blobUrl = URL.createObjectURL(new Blob([bytes], { type: mime }));
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = filename;
+        a.rel = 'noopener';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 1500);
+        return;
+      }
+    } catch {
+      // Fallback below for sandboxed or restricted webviews
+    }
+    window.open(aiGeneratedImage, '_blank', 'noopener');
+  };
+
   return (
     <div
+      ref={rootContainerRef}
       className={`${
         isEmbedded ? '' : 'min-h-screen'
       } bg-[#090909] text-gray-100 flex flex-col overflow-x-hidden w-full selection:bg-[#FC5716] selection:text-white`}
@@ -2235,16 +2271,14 @@ export default function App() {
                       </button>
 
                       {aiGeneratedImage && (
-                        <a
-                          href={aiGeneratedImage}
-                          download={`carolina-flatbeds-${truckYear}-${bedStyle}-${deckType}.${
-                            aiGeneratedImage.startsWith('data:image/png') ? 'png' : 'jpg'
-                          }`}
-                          className="w-full py-3.5 px-4 rounded-xl bg-[#161616] hover:bg-[#202020] border border-[#2c2c2c] text-sm font-semibold text-gray-200 flex items-center justify-center gap-2 transition"
+                        <button
+                          type="button"
+                          onClick={handleDownloadPreview}
+                          className="w-full py-3.5 px-4 rounded-xl bg-[#161616] hover:bg-[#202020] border border-[#2c2c2c] text-sm font-semibold text-gray-200 flex items-center justify-center gap-2 transition cursor-pointer"
                         >
                           <Download className="w-4 h-4 text-[#FC5716]" />
                           <span>Download AI Preview Image</span>
-                        </a>
+                        </button>
                       )}
                     </div>
                   </div>
