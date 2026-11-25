@@ -397,6 +397,7 @@ export default function App() {
   const quoteSectionRef = useRef<HTMLDivElement>(null);
   const generateAbortRef = useRef<AbortController | null>(null);
   const generateRequestIdRef = useRef<number>(0);
+  const uploadRequestIdRef = useRef<number>(0);
   const isSubmittingQuoteRef = useRef<boolean>(false);
   const quoteSessionRefIdRef = useRef<string | null>(null);
 
@@ -491,59 +492,61 @@ export default function App() {
       rowEdgeEnergy[y] = edgeCount > 0 ? edgeSum / edgeCount : 0;
     }
 
-    // Pass 1: Phone-screenshot letterbox & status/nav bar trim scanning outward from peak-activity truck row
-    let anchorY = Math.floor(h * 0.5);
-    const bandHalf = Math.max(6, Math.floor(h * 0.03));
-    const searchMinY = Math.floor(h * 0.15);
-    const searchMaxY = Math.ceil(h * 0.85);
-    let peakBandScore = -1;
-    for (let y = searchMinY; y <= searchMaxY; y++) {
-      let sum = 0;
-      const b0 = Math.max(0, y - bandHalf);
-      const b1 = Math.min(h - 1, y + bandHalf);
-      for (let by = b0; by <= b1; by++) sum += rowEdgeEnergy[by];
-      const weight = 1 - 0.15 * Math.abs(y / h - 0.5);
-      const score = (sum / Math.max(1, b1 - b0 + 1)) * weight;
-      if (score > peakBandScore) {
-        peakBandScore = score;
-        anchorY = y;
-      }
-    }
-
     let yTop = 0;
     let yBottom = h - 1;
 
-    let flatRunUp = 0;
-    let runBottomRow = anchorY;
-    for (let y = anchorY; y >= 0; y--) {
-      const meanDelta = y + 1 < h ? Math.abs(rowMean[y] - rowMean[y + 1]) : 0;
-      const isFlatUiRow = rowMaxChannelStd[y] < 10 && meanDelta < 4;
-      if (isFlatUiRow) {
-        if (flatRunUp === 0) runBottomRow = y;
-        flatRunUp++;
-        if (flatRunUp >= 8) {
-          yTop = Math.min(runBottomRow + 1, anchorY);
-          break;
+    // Pass 1: Trim flat phone-screenshot letterbox & status/nav bars ONLY on portrait/square uploads
+    if (h > w * 0.82) {
+      let anchorY = Math.floor(h * 0.5);
+      const bandHalf = Math.max(6, Math.floor(h * 0.03));
+      const searchMinY = Math.floor(h * 0.15);
+      const searchMaxY = Math.ceil(h * 0.85);
+      let peakBandScore = -1;
+      for (let y = searchMinY; y <= searchMaxY; y++) {
+        let sum = 0;
+        const b0 = Math.max(0, y - bandHalf);
+        const b1 = Math.min(h - 1, y + bandHalf);
+        for (let by = b0; by <= b1; by++) sum += rowEdgeEnergy[by];
+        const weight = 1 - 0.15 * Math.abs(y / h - 0.5);
+        const score = (sum / Math.max(1, b1 - b0 + 1)) * weight;
+        if (score > peakBandScore) {
+          peakBandScore = score;
+          anchorY = y;
         }
-      } else {
-        flatRunUp = 0;
       }
-    }
 
-    let flatRunDown = 0;
-    let runTopRow = anchorY;
-    for (let y = anchorY; y < h; y++) {
-      const meanDelta = y > 0 ? Math.abs(rowMean[y] - rowMean[y - 1]) : 0;
-      const isFlatUiRow = rowMaxChannelStd[y] < 10 && meanDelta < 4;
-      if (isFlatUiRow) {
-        if (flatRunDown === 0) runTopRow = y;
-        flatRunDown++;
-        if (flatRunDown >= 8) {
-          yBottom = Math.max(runTopRow - 1, anchorY);
-          break;
+      let flatRunUp = 0;
+      let runBottomRow = anchorY;
+      for (let y = anchorY; y >= 0; y--) {
+        const meanDelta = y + 1 < h ? Math.abs(rowMean[y] - rowMean[y + 1]) : 0;
+        const isFlatUiRow = rowMaxChannelStd[y] < 6 && meanDelta < 2.5;
+        if (isFlatUiRow) {
+          if (flatRunUp === 0) runBottomRow = y;
+          flatRunUp++;
+          if (flatRunUp >= 8) {
+            yTop = Math.min(runBottomRow + 1, anchorY);
+            break;
+          }
+        } else {
+          flatRunUp = 0;
         }
-      } else {
-        flatRunDown = 0;
+      }
+
+      let flatRunDown = 0;
+      let runTopRow = anchorY;
+      for (let y = anchorY; y < h; y++) {
+        const meanDelta = y > 0 ? Math.abs(rowMean[y] - rowMean[y - 1]) : 0;
+        const isFlatUiRow = rowMaxChannelStd[y] < 6 && meanDelta < 2.5;
+        if (isFlatUiRow) {
+          if (flatRunDown === 0) runTopRow = y;
+          flatRunDown++;
+          if (flatRunDown >= 8) {
+            yBottom = Math.max(runTopRow - 1, anchorY);
+            break;
+          }
+        } else {
+          flatRunDown = 0;
+        }
       }
     }
 
@@ -576,7 +579,7 @@ export default function App() {
         const winCenterNorm = (winY + targetH / 2 - trimTop) / Math.max(1, trimH);
         const centerWeight = 1 - 0.25 * Math.abs(winCenterNorm - 0.52);
         const score = energy * centerWeight;
-        if (score > bestScore) {
+        if (energy > 0 && score > bestScore) {
           bestScore = score;
           bestTop = winY;
         }
@@ -794,6 +797,7 @@ export default function App() {
 
   // Process uploaded image file (Fail-closed EXIF-stripping canvas re-encode + lazy iPhone HEIC conversion)
   const processImageFile = async (file: File) => {
+    const uploadReqId = ++uploadRequestIdRef.current;
     setUploadError(null);
     setAiError(null);
 
@@ -826,22 +830,31 @@ export default function App() {
         const converted = await convert({ blob: file, toType: 'image/jpeg', quality: 0.9 });
         sourceBlob = Array.isArray(converted) ? converted[0] : converted;
       } catch {
-        setUploadError('Could not convert HEIC photo. Please try saving as JPG or PNG and uploading again.');
-        if (fileInputRef.current) fileInputRef.current.value = '';
+        if (uploadReqId === uploadRequestIdRef.current) {
+          setUploadError('Could not convert HEIC photo. Please try saving as JPG or PNG and uploading again.');
+          if (fileInputRef.current) fileInputRef.current.value = '';
+        }
         return;
       } finally {
-        setIsConvertingHeic(false);
+        if (uploadReqId === uploadRequestIdRef.current) {
+          setIsConvertingHeic(false);
+        }
       }
+      if (uploadReqId !== uploadRequestIdRef.current) return;
     }
 
     const reader = new FileReader();
     reader.onerror = () => {
-      setUploadError('Failed to read image file. Please try another photo.');
+      if (uploadReqId === uploadRequestIdRef.current) {
+        setUploadError('Failed to read image file. Please try another photo.');
+      }
     };
     reader.onload = (event) => {
+      if (uploadReqId !== uploadRequestIdRef.current) return;
       const rawDataUrl = event.target?.result as string;
       const img = new Image();
       img.onload = () => {
+        if (uploadReqId !== uploadRequestIdRef.current) return;
         try {
           const canvas = document.createElement('canvas');
           const maxDim = 1600;
@@ -871,13 +884,20 @@ export default function App() {
           ctx.fillRect(0, 0, targetW, targetH);
           ctx.drawImage(img, 0, 0, targetW, targetH);
           const normalizedCanvas = cropToLandscapeTruckFrame(canvas);
+          const normW = normalizedCanvas.width;
+          const normH = normalizedCanvas.height;
           const sanitizedDataUrl = normalizedCanvas.toDataURL('image/jpeg', 0.92);
+          if (normalizedCanvas !== canvas) {
+            normalizedCanvas.width = 0;
+            normalizedCanvas.height = 0;
+          }
+          canvas.width = 0;
+          canvas.height = 0;
+          if (uploadReqId !== uploadRequestIdRef.current) return;
           generateAbortRef.current?.abort();
           generateRequestIdRef.current += 1;
           setIsAiGenerating(false);
-          setUploadedAspectRatio(
-            computeClosestAspectRatio(normalizedCanvas.width, normalizedCanvas.height)
-          );
+          setUploadedAspectRatio(computeClosestAspectRatio(normW, normH));
           setHasUserSelectedModel(false);
           setUploadedImage(sanitizedDataUrl);
           setActiveSampleId(null);
@@ -886,12 +906,16 @@ export default function App() {
           setIsQuoteFormOpen(false);
           setQuoteSubmitted(false);
         } catch {
-          setUploadError('Unable to process image file. Please try another JPG, PNG, or WebP photo.');
+          if (uploadReqId === uploadRequestIdRef.current) {
+            setUploadError('Unable to process image file. Please try another JPG, PNG, or WebP photo.');
+          }
           return;
         }
       };
       img.onerror = () => {
-        setUploadError('Corrupted image data. Please choose a valid image.');
+        if (uploadReqId === uploadRequestIdRef.current) {
+          setUploadError('Corrupted image data. Please choose a valid image.');
+        }
       };
       img.src = rawDataUrl;
     };
@@ -913,6 +937,7 @@ export default function App() {
 
   // One-click sample truck loader
   const handleSelectSampleTruck = (sample: SampleTruck) => {
+    uploadRequestIdRef.current += 1;
     generateAbortRef.current?.abort();
     generateRequestIdRef.current += 1;
     setIsAiGenerating(false);
