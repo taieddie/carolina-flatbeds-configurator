@@ -319,6 +319,35 @@ export default function App() {
   const [selectedDeductions, setSelectedDeductions] = useState<string[]>([]);
   const [showExtraAccordion, setShowExtraAccordion] = useState<boolean>(false);
 
+  // Detect Wix iframe embed mode (?embed=1 or running inside an iframe)
+  const [isEmbedded] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      return (
+        new URLSearchParams(window.location.search).get('embed') === '1' ||
+        window.self !== window.top
+      );
+    } catch {
+      return true;
+    }
+  });
+
+  useEffect(() => {
+    if (!isEmbedded || typeof window === 'undefined') return;
+    const postHeight = () => {
+      const height = document.documentElement.scrollHeight;
+      window.parent.postMessage({ type: 'cfb-resize', height }, '*');
+    };
+    postHeight();
+    const ro = new ResizeObserver(() => postHeight());
+    ro.observe(document.body);
+    window.addEventListener('resize', postHeight);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', postHeight);
+    };
+  }, [isEmbedded]);
+
   // Optional price sheet estimate visibility (default false so the UI stays simple & quote-focused)
   const [showPrices, setShowPrices] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
@@ -1048,49 +1077,55 @@ export default function App() {
   ].filter(Boolean) as string[];
 
   return (
-    <div className="min-h-screen bg-[#090909] text-gray-100 flex flex-col overflow-x-hidden w-full selection:bg-[#FC5716] selection:text-white">
-      {/* Clean Brand Header (zero truncation across 320px - 1920px) */}
-      <header className="border-b border-[#222222] bg-[#0d0d0d]/95 backdrop-blur sticky top-0 z-40 w-full">
-        <div className="max-w-5xl mx-auto px-3 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2 sm:gap-3">
-          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-            <div className="w-8 h-8 sm:w-10 sm:h-10 shrink-0 rounded-lg bg-[#FC5716] flex items-center justify-center font-heading font-bold text-black text-sm sm:text-xl tracking-wider shadow-md shadow-[#FC5716]/20">
-              CF
-            </div>
-            <div>
-              <div className="font-heading font-bold text-sm sm:text-lg text-white tracking-wide flex items-center gap-2 whitespace-nowrap">
-                <span>CAROLINA FLATBEDS</span>
-                <span className="text-[10px] font-sans font-semibold px-2 py-0.5 rounded bg-[#FC5716]/15 text-[#FC5716] border border-[#FC5716]/30 uppercase tracking-wider hidden lg:inline-block">
-                  AI Flatbed Visualizer
-                </span>
+    <div
+      className={`${
+        isEmbedded ? '' : 'min-h-screen'
+      } bg-[#090909] text-gray-100 flex flex-col overflow-x-hidden w-full selection:bg-[#FC5716] selection:text-white`}
+    >
+      {/* Clean Brand Header (hidden in Wix iframe ?embed=1 mode to avoid duplicate nav) */}
+      {!isEmbedded && (
+        <header className="border-b border-[#222222] bg-[#0d0d0d]/95 backdrop-blur sticky top-0 z-40 w-full">
+          <div className="max-w-5xl mx-auto px-3 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-2 sm:gap-3">
+            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 shrink-0 rounded-lg bg-[#FC5716] flex items-center justify-center font-heading font-bold text-black text-sm sm:text-xl tracking-wider shadow-md shadow-[#FC5716]/20">
+                CF
               </div>
-              <p className="hidden sm:block text-xs text-gray-400 font-medium">
-                Authorized DD Fab Upfitter | Charleston, SC
-              </p>
+              <div>
+                <div className="font-heading font-bold text-sm sm:text-lg text-white tracking-wide flex items-center gap-2 whitespace-nowrap">
+                  <span>CAROLINA FLATBEDS</span>
+                  <span className="text-[10px] font-sans font-semibold px-2 py-0.5 rounded bg-[#FC5716]/15 text-[#FC5716] border border-[#FC5716]/30 uppercase tracking-wider hidden lg:inline-block">
+                    AI Flatbed Visualizer
+                  </span>
+                </div>
+                <p className="hidden sm:block text-xs text-gray-400 font-medium">
+                  Authorized DD Fab Upfitter | Charleston, SC
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+              {showPrices && (
+                <button
+                  type="button"
+                  onClick={() => setShowPrices(false)}
+                  className="px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold border transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap bg-[#FC5716]/15 border-[#FC5716] text-[#FC5716]"
+                >
+                  <SlidersHorizontal className="w-3.5 h-3.5 shrink-0" />
+                  <span>Hide Price Sheet</span>
+                </button>
+              )}
+
+              <a
+                href="tel:8436476437"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#161616] border border-[#2c2c2c] hover:border-[#FC5716]/50 text-xs font-semibold text-gray-200 transition whitespace-nowrap"
+              >
+                <Phone className="w-3.5 h-3.5 text-[#FC5716]" />
+                <span>843-647-6437</span>
+              </a>
             </div>
           </div>
-
-          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-            {showPrices && (
-              <button
-                type="button"
-                onClick={() => setShowPrices(false)}
-                className="px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold border transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap bg-[#FC5716]/15 border-[#FC5716] text-[#FC5716]"
-              >
-                <SlidersHorizontal className="w-3.5 h-3.5 shrink-0" />
-                <span>Hide Price Sheet</span>
-              </button>
-            )}
-
-            <a
-              href="tel:8436476437"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#161616] border border-[#2c2c2c] hover:border-[#FC5716]/50 text-xs font-semibold text-gray-200 transition whitespace-nowrap"
-            >
-              <Phone className="w-3.5 h-3.5 text-[#FC5716]" />
-              <span>843-647-6437</span>
-            </a>
-          </div>
-        </div>
-      </header>
+        </header>
+      )}
 
       {/* Main Content: Top-to-Bottom Linear Flow (Step 1 -> Step 2 -> Step 3) */}
       <main className="flex-1 max-w-5xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-5 sm:py-7">
@@ -2389,18 +2424,20 @@ export default function App() {
         </div>
       </main>
 
-      {/* Simple Footer */}
-      <footer className="border-t border-[#1e1e1e] bg-[#0a0a0a] py-4 px-4 text-center text-xs text-gray-400">
-        <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
-          <span>Carolina Flatbeds | Authorized DD Fab Dealer & Upfitter - Charleston, SC</span>
-          <span>
-            Questions or Custom Builds? Call{' '}
-            <a href="tel:8436476437" className="text-[#FC5716] font-semibold hover:underline">
-              843-647-6437
-            </a>
-          </span>
-        </div>
-      </footer>
+      {/* Simple Footer (hidden in Wix iframe ?embed=1 mode) */}
+      {!isEmbedded && (
+        <footer className="border-t border-[#1e1e1e] bg-[#0a0a0a] py-4 px-4 text-center text-xs text-gray-400">
+          <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
+            <span>Carolina Flatbeds | Authorized DD Fab Dealer & Upfitter - Charleston, SC</span>
+            <span>
+              Questions or Custom Builds? Call{' '}
+              <a href="tel:8436476437" className="text-[#FC5716] font-semibold hover:underline">
+                843-647-6437
+              </a>
+            </span>
+          </div>
+        </footer>
+      )}
     </div>
   );
 }
