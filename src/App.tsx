@@ -930,11 +930,17 @@ export default function App() {
     }
   };
 
-  const createQuoteSessionRefId = () =>
-    'CFB-' +
-    (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-      ? crypto.randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase()
-      : `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`.slice(-8).toUpperCase());
+  const createQuoteSessionRefId = () => {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return 'CFB-' + crypto.randomUUID().replace(/-/g, '').slice(0, 12).toUpperCase();
+    }
+    const bytes = new Uint8Array(6);
+    if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+      crypto.getRandomValues(bytes);
+      return 'CFB-' + Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('').toUpperCase();
+    }
+    return `CFB-${Date.now().toString(36).toUpperCase().slice(-8)}A1B2`;
+  };
 
   // Open & scroll to the Quote Request Card (accounting for 64px sticky header + 16px margin)
   const handleOpenQuoteRequest = () => {
@@ -965,7 +971,7 @@ export default function App() {
       setValidationError('Please enter a valid 10-digit phone number.');
       return;
     }
-    if (!formData.email.trim().includes('@')) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
       setValidationError('Please enter a valid email address.');
       return;
     }
@@ -1062,16 +1068,18 @@ export default function App() {
           ...inquiryPayload
         })
       });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
+      const resData = await res.json().catch(() => ({}));
+      if (!res.ok || resData?.emailDelivered !== true) {
+        quoteSessionRefIdRef.current = null;
         setValidationError(
-          errData?.error || 'Could not submit your quote right now. Please try again in a moment.'
+          resData?.error || 'Could not submit your quote right now. Please try submitting again in a moment.'
         );
         return;
       }
       quoteSessionRefIdRef.current = null;
       setQuoteSubmitted(true);
     } catch {
+      quoteSessionRefIdRef.current = null;
       setValidationError('Network error submitting quote. Please check your connection and try again.');
     } finally {
       isSubmittingQuoteRef.current = false;

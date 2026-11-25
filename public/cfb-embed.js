@@ -7,7 +7,16 @@ class CfbVisualizerElement extends HTMLElement {
     this.style.height = '2400px';
 
     const iframe = document.createElement('iframe');
-    iframe.src = 'https://cfb-ai-generator.tek123168.workers.dev/?embed=1';
+    const embedUrl = new URL('https://cfb-ai-generator.tek123168.workers.dev/');
+    embedUrl.searchParams.set('embed', '1');
+    try {
+      const hostParams = new URLSearchParams(window.location.search);
+      if (hostParams.get('test') === '1') embedUrl.searchParams.set('test', '1');
+      if (hostParams.get('is_test') === '1') embedUrl.searchParams.set('is_test', '1');
+    } catch {
+      // Ignore cross-origin location read restrictions
+    }
+    iframe.src = embedUrl.toString();
     iframe.title = 'Carolina Flatbeds AI Flatbed Visualizer';
     iframe.setAttribute('scrolling', 'no');
     iframe.setAttribute('allow', 'clipboard-write');
@@ -19,9 +28,17 @@ class CfbVisualizerElement extends HTMLElement {
 
     this._onMessage = (event) => {
       if (event.origin !== 'https://cfb-ai-generator.tek123168.workers.dev') return;
+      if (event.source !== iframe.contentWindow) return;
       const data = event.data;
-      if (data && data.type === 'cfb-resize' && typeof data.height === 'number' && data.height > 200) {
-        const nextHeight = `${Math.ceil(data.height) + 8}px`;
+      if (
+        data &&
+        data.type === 'cfb-resize' &&
+        typeof data.height === 'number' &&
+        Number.isFinite(data.height) &&
+        data.height >= 200
+      ) {
+        const clampedHeight = Math.min(Math.max(Math.ceil(data.height) + 8, 600), 12000);
+        const nextHeight = `${clampedHeight}px`;
         iframe.style.height = nextHeight;
         this.style.height = nextHeight;
       }
