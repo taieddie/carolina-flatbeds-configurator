@@ -374,6 +374,7 @@ export default function App() {
   const [uploadedAspectRatio, setUploadedAspectRatio] = useState<string>('16:9');
   const [hasUserSelectedModel, setHasUserSelectedModel] = useState<boolean>(false);
   const [isConvertingHeic, setIsConvertingHeic] = useState<boolean>(false);
+  const [isProcessingUpload, setIsProcessingUpload] = useState<boolean>(false);
 
   // Quote form state
   const [isQuoteFormOpen, setIsQuoteFormOpen] = useState<boolean>(false);
@@ -530,7 +531,7 @@ export default function App() {
       for (let y = anchorY; y >= 0; y--) {
         const meanDelta = y + 1 < h ? Math.abs(rowMean[y] - rowMean[y + 1]) : 0;
         const isFlatUiRow =
-          (rowMean[y] < 38 || rowMean[y] > 242) &&
+          rowMean[y] < 36 &&
           rowMaxChannelStd[y] < 5 &&
           meanDelta < 2.0;
         if (isFlatUiRow) {
@@ -550,7 +551,7 @@ export default function App() {
       for (let y = anchorY; y < h; y++) {
         const meanDelta = y > 0 ? Math.abs(rowMean[y] - rowMean[y - 1]) : 0;
         const isFlatUiRow =
-          (rowMean[y] < 38 || rowMean[y] > 242) &&
+          rowMean[y] < 36 &&
           rowMaxChannelStd[y] < 5 &&
           meanDelta < 2.0;
         if (isFlatUiRow) {
@@ -823,6 +824,7 @@ export default function App() {
   const processImageFile = async (file: File) => {
     const uploadReqId = ++uploadRequestIdRef.current;
     setIsConvertingHeic(false);
+    setIsProcessingUpload(false);
     setUploadError(null);
 
     if (file.size > 10 * 1024 * 1024) {
@@ -843,6 +845,7 @@ export default function App() {
       return;
     }
 
+    setIsProcessingUpload(true);
     generateAbortRef.current?.abort();
     generateRequestIdRef.current += 1;
     setIsAiGenerating(false);
@@ -865,6 +868,7 @@ export default function App() {
         sourceBlob = Array.isArray(converted) ? converted[0] : converted;
       } catch {
         if (uploadReqId === uploadRequestIdRef.current) {
+          setIsProcessingUpload(false);
           setUploadError('Could not convert HEIC photo. Please try saving as JPG or PNG and uploading again.');
           if (fileInputRef.current) fileInputRef.current.value = '';
         }
@@ -880,6 +884,7 @@ export default function App() {
     const reader = new FileReader();
     reader.onerror = () => {
       if (uploadReqId === uploadRequestIdRef.current) {
+        setIsProcessingUpload(false);
         setUploadError('Failed to read image file. Please try another photo.');
       }
     };
@@ -895,6 +900,7 @@ export default function App() {
           let targetW = img.naturalWidth;
           let targetH = img.naturalHeight;
           if (targetW <= 0 || targetH <= 0) {
+            setIsProcessingUpload(false);
             setUploadError('Unable to process image file. Please try another JPG, PNG, or WebP photo.');
             return;
           }
@@ -911,6 +917,7 @@ export default function App() {
           canvas.height = targetH;
           const ctx = canvas.getContext('2d');
           if (!ctx) {
+            setIsProcessingUpload(false);
             setUploadError('Unable to process image file. Please try another JPG, PNG, or WebP photo.');
             return;
           }
@@ -968,8 +975,10 @@ export default function App() {
           setRenderedConfigKey(null);
           setIsQuoteFormOpen(false);
           setQuoteSubmitted(false);
+          setIsProcessingUpload(false);
         } catch {
           if (uploadReqId === uploadRequestIdRef.current) {
+            setIsProcessingUpload(false);
             setUploadError('Unable to process image file. Please try another JPG, PNG, or WebP photo.');
           }
           return;
@@ -977,6 +986,7 @@ export default function App() {
       };
       img.onerror = () => {
         if (uploadReqId === uploadRequestIdRef.current) {
+          setIsProcessingUpload(false);
           setUploadError('Corrupted image data. Please choose a valid image.');
         }
       };
@@ -1002,6 +1012,7 @@ export default function App() {
   const handleSelectSampleTruck = (sample: SampleTruck) => {
     uploadRequestIdRef.current += 1;
     setIsConvertingHeic(false);
+    setIsProcessingUpload(false);
     generateAbortRef.current?.abort();
     generateRequestIdRef.current += 1;
     setIsAiGenerating(false);
@@ -1031,7 +1042,7 @@ export default function App() {
 
   // Step 3: Trigger AI Flatbed Generation
   const handleGenerateAiFlatbed = async () => {
-    if (!uploadedImage) return;
+    if (!uploadedImage || isProcessingUpload || isConvertingHeic) return;
     generateAbortRef.current?.abort();
     const controller = new AbortController();
     generateAbortRef.current = controller;
@@ -1130,13 +1141,14 @@ export default function App() {
           body: JSON.stringify({
             image: imagePayload,
             modelId: legacyModelId,
-            truckYear,
-            truckMakeModel: resolvedTruckName,
-            wheelConfig,
+            truckYear: activeSampleId !== null || hasUserSelectedModel ? truckYear : '',
+            truckMakeModel: activeSampleId !== null || hasUserSelectedModel ? resolvedTruckName : '',
+            wheelConfig: showPrices || activeSampleId !== null ? wheelConfig : 'srw',
             isCustomUpload: activeSampleId === null,
+            hasUserSelectedModel,
             explicitWheelConfig: showPrices,
             aspectRatio: uploadedAspectRatio,
-            bedLength,
+            bedLength: showPrices || activeSampleId !== null ? bedLength : '',
             bedStyle,
             deckType,
             addOns: selectedAddOns,
@@ -2537,7 +2549,7 @@ export default function App() {
                     <div className={aiGeneratedImage ? 'grid grid-cols-1 sm:grid-cols-2 gap-2.5' : ''}>
                       <button
                         type="button"
-                        disabled={!uploadedImage || isAiGenerating || isConvertingHeic}
+                        disabled={!uploadedImage || isAiGenerating || isConvertingHeic || isProcessingUpload}
                         onClick={handleGenerateAiFlatbed}
                         className={`w-full py-3.5 px-4 rounded-xl font-heading font-bold text-base tracking-wide transition flex items-center justify-center gap-2 cursor-pointer ${
                           aiGeneratedImage && !isRenderOutdated
