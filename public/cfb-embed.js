@@ -1,32 +1,8 @@
 class CfbVisualizerElement extends HTMLElement {
-  connectedCallback() {
-    if (this.querySelector('iframe')) return;
-    this.style.display = 'block';
-    this.style.width = '100%';
-    this.style.background = '#090909';
-    this.style.height = '2400px';
-
-    const iframe = document.createElement('iframe');
-    const embedUrl = new URL('https://cfb-ai-generator.tek123168.workers.dev/');
-    embedUrl.searchParams.set('embed', '1');
-    embedUrl.searchParams.set('v', '2');
-    try {
-      const hostParams = new URLSearchParams(window.location.search);
-      if (hostParams.get('test') === '1') embedUrl.searchParams.set('test', '1');
-      if (hostParams.get('is_test') === '1') embedUrl.searchParams.set('is_test', '1');
-    } catch {
-      // Ignore cross-origin location read restrictions
+  _attachMessageListener(iframe) {
+    if (this._onMessage) {
+      window.removeEventListener('message', this._onMessage);
     }
-    iframe.src = embedUrl.toString();
-    iframe.title = 'Carolina Flatbeds AI Flatbed Visualizer';
-    iframe.setAttribute('scrolling', 'no');
-    iframe.setAttribute('allow', 'clipboard-write');
-    iframe.style.width = '100%';
-    iframe.style.height = '2400px';
-    iframe.style.border = '0';
-    iframe.style.display = 'block';
-    iframe.style.background = '#090909';
-
     this._onMessage = (event) => {
       if (event.origin !== 'https://cfb-ai-generator.tek123168.workers.dev') return;
       if (event.source !== iframe.contentWindow) return;
@@ -45,6 +21,44 @@ class CfbVisualizerElement extends HTMLElement {
       }
     };
     window.addEventListener('message', this._onMessage);
+  }
+
+  connectedCallback() {
+    const existingIframe = this.querySelector('iframe');
+    if (existingIframe) {
+      if (!this._onMessage) {
+        this._attachMessageListener(existingIframe);
+      }
+      return;
+    }
+    this.style.display = 'block';
+    this.style.width = '100%';
+    this.style.background = '#090909';
+    this.style.height = '2400px';
+
+    const iframe = document.createElement('iframe');
+    const embedUrl = new URL('https://cfb-ai-generator.tek123168.workers.dev/');
+    embedUrl.searchParams.set('embed', '1');
+    embedUrl.searchParams.set('v', '2');
+    try {
+      const hostParams = new URLSearchParams(window.location.search);
+      if (hostParams.get('test') === '1') embedUrl.searchParams.set('test', '1');
+      if (hostParams.get('is_test') === '1') embedUrl.searchParams.set('is_test', '1');
+      if (hostParams.get('prices') === '1') embedUrl.searchParams.set('prices', '1');
+    } catch {
+      // Ignore cross-origin location read restrictions
+    }
+    iframe.src = embedUrl.toString();
+    iframe.title = 'Carolina Flatbeds AI Flatbed Visualizer';
+    iframe.setAttribute('scrolling', 'no');
+    iframe.setAttribute('allow', 'clipboard-write');
+    iframe.style.width = '100%';
+    iframe.style.height = '2400px';
+    iframe.style.border = '0';
+    iframe.style.display = 'block';
+    iframe.style.background = '#090909';
+
+    this._attachMessageListener(iframe);
     this.appendChild(iframe);
   }
 

@@ -407,11 +407,11 @@ export default function App() {
     typeof window !== 'undefined'
       ? (window.sessionStorage?.getItem('cfb_qa_token') || '').trim()
       : '';
-  const isTestMode =
+  const hasTestUrlParam =
     typeof window !== 'undefined' &&
-    Boolean(qaTestToken) &&
     (new URLSearchParams(window.location.search).get('test') === '1' ||
       new URLSearchParams(window.location.search).get('is_test') === '1');
+  const isTestMode = hasTestUrlParam && Boolean(qaTestToken);
 
   const computeClosestAspectRatio = (w: number, h: number): string => {
     const ratio = w / Math.max(1, h);
@@ -790,8 +790,9 @@ export default function App() {
     const basePrice = isCabChassis ? null : wheelConfig === 'dually' ? baseSpec.dually : baseSpec.srw;
     const installPrice = baseSpec.install;
 
-    // Tacoma deduction (-$275 on Standard Model per PDF Table 2)
+    // Tacoma deduction (-$275 on Standard Model per PDF Table 2, pricing mode only)
     const tacomaDeduction =
+      showPrices &&
       bedStyle === 'standard' &&
       (activeSampleId !== null || hasUserSelectedMakeModel) &&
       truckMakeModel === 'Toyota Tacoma'
@@ -835,13 +836,15 @@ export default function App() {
       });
     }
 
-    for (const id of selectedDeductions) {
-      const ded = TABLE2_DEDUCTION_OPTIONS.find((d) => d.id === id);
-      if (ded) {
-        if (ded.woodTrexOnly && deckType === 'steel') continue;
-        const amt = ded.getAmount(deckType);
-        totalDeductions += amt;
-        itemizedDeductions.push({ label: ded.name, amount: amt });
+    if (showPrices) {
+      for (const id of selectedDeductions) {
+        const ded = TABLE2_DEDUCTION_OPTIONS.find((d) => d.id === id);
+        if (ded) {
+          if (ded.woodTrexOnly && deckType === 'steel') continue;
+          const amt = ded.getAmount(deckType);
+          totalDeductions += amt;
+          itemizedDeductions.push({ label: ded.name, amount: amt });
+        }
       }
     }
 
@@ -1224,6 +1227,7 @@ export default function App() {
             wheelConfig: showPrices || activeSampleId !== null ? wheelConfig : 'srw',
             isCustomUpload: activeSampleId === null,
             hasUserSelectedModel: hasUserSelectedMakeModel,
+            hasUserSelectedYear,
             explicitWheelConfig: showPrices,
             aspectRatio: uploadedAspectRatio,
             bedLength: showPrices || activeSampleId !== null ? bedLength : '',
@@ -1249,12 +1253,17 @@ export default function App() {
       if (reqId !== generateRequestIdRef.current || controller.signal.aborted) return;
 
       if (!response.ok) {
-        const statusMsg =
+        const errData = await response.json().catch(() => ({}));
+        const fallbackStatusMsg =
           response.status === 429
             ? 'Too many previews requested from your connection. Please wait a few minutes and try again.'
             : response.status === 400
             ? 'Could not process this truck image. Please try another JPG, PNG, or WebP photo.'
             : 'AI generator is currently busy. Please click Generate AI Flatbed Preview to retry.';
+        const statusMsg =
+          typeof errData?.error === 'string' && errData.error.trim()
+            ? errData.error.trim()
+            : fallbackStatusMsg;
         throw new Error(statusMsg);
       }
 
@@ -1343,9 +1352,9 @@ export default function App() {
       ...selectedExtraInstalls.map((id) => EXTRA_INSTALL_OPTIONS.find((e) => e.id === id)?.name)
     ].filter(Boolean) as string[];
 
-    const selectedDeductionNames = priceBreakdown.itemizedDeductions.map(
-      (d) => `${d.label} (-$${d.amount})`
-    );
+    const selectedDeductionNames = showPrices
+      ? priceBreakdown.itemizedDeductions.map((d) => `${d.label} (-$${d.amount})`)
+      : [];
 
     const summarySnapshot = `${displayTruckLabel} (${bedStyleLabel}, ${deckTypeLabel}${
       selectedAddOnNames.length > 0 ? ' + ' + selectedAddOnNames.join(', ') : ''
@@ -1386,8 +1395,8 @@ export default function App() {
         addOnLabels: selectedAddOnNames,
         dRingCount,
         extraInstalls: selectedExtraInstalls,
-        deductions: selectedDeductions,
-        deductionLabels: selectedDeductionNames,
+        deductions: showPrices ? selectedDeductions : [],
+        deductionLabels: showPrices ? selectedDeductionNames : [],
         priceBreakdown: {
           basePrice: priceBreakdown.basePrice,
           installPrice: priceBreakdown.installPrice,
@@ -1422,14 +1431,13 @@ export default function App() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(isTestMode && qaTestToken
-            ? { 'X-CFB-Test-Mode': '1', 'X-CFB-Test-Token': qaTestToken }
-            : {})
+          ...(hasTestUrlParam ? { 'X-CFB-Test-Mode': '1' } : {}),
+          ...(isTestMode && qaTestToken ? { 'X-CFB-Test-Token': qaTestToken } : {})
         },
         signal: quoteController.signal,
         body: JSON.stringify({
           action: 'submit-quote',
-          ...(isTestMode && qaTestToken ? { isTest: true } : {}),
+          ...(hasTestUrlParam ? { isTest: true } : {}),
           ...inquiryPayload
         })
       });
@@ -1439,7 +1447,9 @@ export default function App() {
         Array.isArray(resData?.skippedAttachments) && resData.skippedAttachments.length > 0;
       if (!res.ok || resData?.emailDelivered !== true || hasSkippedAttachments) {
         setValidationError(
-          res.status === 429
+          res.status === 403 && typeof resData?.error === 'string'
+            ? resData.error
+            : res.status === 429
             ? 'Too many quote requests from your connection. Please wait a few minutes and try again.'
             : res.status === 400
             ? 'Please check your contact details and attached photos, then try again.'
@@ -1474,7 +1484,8 @@ export default function App() {
   const handleDownloadPreview = () => {
     if (!aiGeneratedImage) return;
     const ext = aiGeneratedImage.startsWith('data:image/png') ? 'png' : 'jpg';
-    const filename = `carolina-flatbeds-${truckYear}-${bedStyle}-${deckType}.${ext}`;
+    const yearSlug = activeSampleId !== null || hasUserSelectedYear ? truckYear : 'custom';
+    const filename = `carolina-flatbeds-${yearSlug}-${bedStyle}-${deckType}.${ext}`;
     try {
       const match = aiGeneratedImage.match(/^data:([^;]+);base64,(.+)$/);
       if (match) {
@@ -1531,7 +1542,10 @@ export default function App() {
               {showPrices && (
                 <button
                   type="button"
-                  onClick={() => setShowPrices(false)}
+                  onClick={() => {
+                    setShowPrices(false);
+                    setSelectedDeductions([]);
+                  }}
                   className="px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold border transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap bg-[#FC5716]/15 border-[#FC5716] text-[#FC5716]"
                 >
                   <SlidersHorizontal className="w-3.5 h-3.5 shrink-0" />
@@ -1644,6 +1658,7 @@ export default function App() {
                             const matchedSample = SAMPLE_TRUCKS.find((s) => s.makeModel === val);
                             if (matchedSample) {
                               setActiveSampleId(matchedSample.id);
+                              setTruckYear(matchedSample.year);
                               setUploadedImage(matchedSample.beforeImage);
                               setUploadedAspectRatio(matchedSample.beforeImage.includes('stock_ram_2500') ? '3:2' : '16:9');
                               setWheelConfig(matchedSample.wheelConfig);
@@ -1654,7 +1669,7 @@ export default function App() {
                         className="w-full bg-[#1a1a1a] border border-[#333333] focus:border-[#FC5716] rounded-lg px-3.5 py-2.5 text-sm text-white font-medium outline-none transition"
                       >
                         {activeSampleId === null && (
-                          <option value="__auto__">Auto-detect from uploaded photo</option>
+                          <option value="__auto__">Match uploaded truck photo</option>
                         )}
                         {TRUCK_MAKE_MODELS.map((item) => (
                           <option key={item} value={item}>
@@ -2400,26 +2415,27 @@ export default function App() {
                 <div className="flex flex-col">
                   {/* Before / After / Side-by-Side Toggle Bar (when AI render is complete) */}
                   {aiGeneratedImage && !isAiGenerating && (
-                    <div className="flex items-center justify-between gap-2 mb-3 bg-[#181818] p-1 rounded-lg border border-[#2c2c2c]">
+                    <div className="flex items-center justify-between gap-1.5 sm:gap-2 mb-3 bg-[#181818] p-1 rounded-lg border border-[#2c2c2c] w-full overflow-hidden">
                       {(
                         [
-                          { id: 'after', label: 'After (AI Flatbed)' },
-                          { id: 'before', label: 'Before (Original)' },
-                          { id: 'split', label: 'Side-by-Side' }
-                        ] as { id: 'after' | 'before' | 'split'; label: string }[]
+                          { id: 'after', shortLabel: 'After', fullSuffix: ' (AI Flatbed)' },
+                          { id: 'before', shortLabel: 'Before', fullSuffix: ' (Original)' },
+                          { id: 'split', shortLabel: 'Side-by-Side', fullSuffix: '' }
+                        ] as { id: 'after' | 'before' | 'split'; shortLabel: string; fullSuffix: string }[]
                       ).map((mode) => (
                         <button
                           key={mode.id}
                           type="button"
                           aria-pressed={previewViewMode === mode.id}
                           onClick={() => setPreviewViewMode(mode.id)}
-                          className={`flex-1 py-1.5 px-1.5 sm:px-2 rounded-md text-[11px] sm:text-xs font-semibold transition cursor-pointer text-center whitespace-nowrap ${
+                          className={`flex-1 min-w-0 py-1.5 px-1.5 sm:px-2 rounded-md text-[11px] sm:text-xs font-semibold transition cursor-pointer text-center whitespace-nowrap truncate ${
                             previewViewMode === mode.id
                               ? 'bg-[#261c17] text-[#FC5716] border border-[#FC5716]/60 font-bold shadow'
                               : 'text-gray-300 hover:text-white border border-transparent'
                           }`}
                         >
-                          {mode.label}
+                          <span>{mode.shortLabel}</span>
+                          {mode.fullSuffix && <span className="hidden sm:inline">{mode.fullSuffix}</span>}
                         </button>
                       ))}
                     </div>
@@ -2570,14 +2586,15 @@ export default function App() {
                           + {label}
                         </span>
                       ))}
-                      {priceBreakdown.itemizedDeductions.map((ded) => (
-                        <span
-                          key={ded.label}
-                          className="px-2.5 py-1 rounded-md bg-emerald-950/50 border border-emerald-700/40 text-xs font-medium text-emerald-300"
-                        >
-                          {ded.label} (-${ded.amount})
-                        </span>
-                      ))}
+                      {showPrices &&
+                        priceBreakdown.itemizedDeductions.map((ded) => (
+                          <span
+                            key={ded.label}
+                            className="px-2.5 py-1 rounded-md bg-emerald-950/50 border border-emerald-700/40 text-xs font-medium text-emerald-300"
+                          >
+                            {ded.label} (-${ded.amount})
+                          </span>
+                        ))}
                     </div>
 
                     {/* Optional Price Sheet Breakdown */}
@@ -2739,11 +2756,15 @@ export default function App() {
                       <p className="text-xs text-gray-400 mt-0.5">
                         Your selected truck, flatbed style, deck type, add-ons, and AI preview are attached automatically.
                       </p>
-                      {isTestMode && (
+                      {isTestMode ? (
                         <div className="mt-2 inline-block px-2.5 py-1 rounded-md bg-amber-950/80 border border-amber-600/50 text-[11px] font-semibold text-amber-200">
                           Test Mode (?test=1): Quote emails route to developer test inbox
                         </div>
-                      )}
+                      ) : hasTestUrlParam ? (
+                        <div className="mt-2 inline-block px-2.5 py-1 rounded-md bg-amber-950/80 border border-amber-600/50 text-[11px] font-semibold text-amber-200">
+                          Unauthorized test URL (?test=1): Remove ?test=1 from the URL to submit a live quote.
+                        </div>
+                      ) : null}
                     </div>
 
                     {validationError && (
