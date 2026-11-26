@@ -403,10 +403,14 @@ export default function App() {
   const quoteAbortRef = useRef<AbortController | null>(null);
   const isSubmittingQuoteRef = useRef<boolean>(false);
   const quoteSessionRefIdRef = useRef<string | null>(null);
-  const qaTestToken =
-    typeof window !== 'undefined'
-      ? (window.sessionStorage?.getItem('cfb_qa_token') || '').trim()
-      : '';
+  const qaTestToken = (() => {
+    if (typeof window === 'undefined') return '';
+    try {
+      return (window.sessionStorage?.getItem('cfb_qa_token') || '').trim();
+    } catch {
+      return '';
+    }
+  })();
   const hasTestUrlParam =
     typeof window !== 'undefined' &&
     (new URLSearchParams(window.location.search).get('test') === '1' ||
@@ -1260,10 +1264,11 @@ export default function App() {
             : response.status === 400
             ? 'Could not process this truck image. Please try another JPG, PNG, or WebP photo.'
             : 'AI generator is currently busy. Please click Generate AI Flatbed Preview to retry.';
-        const statusMsg =
-          typeof errData?.error === 'string' && errData.error.trim()
-            ? errData.error.trim()
-            : fallbackStatusMsg;
+        const rawErr = typeof errData?.error === 'string' ? errData.error.trim() : '';
+        const isSafeErr =
+          rawErr.length > 0 &&
+          !/Multi-reference|Invalid request payload|TypeError|SyntaxError|stack/i.test(rawErr);
+        const statusMsg = isSafeErr ? rawErr : fallbackStatusMsg;
         throw new Error(statusMsg);
       }
 
@@ -1410,17 +1415,6 @@ export default function App() {
       uploadedTruckImage: uploadedImage
     };
 
-    try {
-      const existing = JSON.parse(localStorage.getItem('cfb_quote_inquiries') || '[]');
-      const { aiPreviewImage: _a, uploadedTruckImage: _u, ...lightweightInquiry } = inquiryPayload;
-      localStorage.setItem(
-        'cfb_quote_inquiries',
-        JSON.stringify([lightweightInquiry, ...existing.slice(0, 29)])
-      );
-    } catch {
-      // Ignore storage quota errors
-    }
-
     quoteAbortRef.current?.abort();
     const quoteController = new AbortController();
     quoteAbortRef.current = quoteController;
@@ -1456,6 +1450,16 @@ export default function App() {
             : 'Could not submit your quote right now. Please try submitting again in a moment.'
         );
         return;
+      }
+      try {
+        const existing = JSON.parse(localStorage.getItem('cfb_quote_inquiries') || '[]');
+        const { aiPreviewImage: _a, uploadedTruckImage: _u, ...lightweightInquiry } = inquiryPayload;
+        localStorage.setItem(
+          'cfb_quote_inquiries',
+          JSON.stringify([lightweightInquiry, ...existing.slice(0, 29)])
+        );
+      } catch {
+        // Ignore storage quota errors
       }
       quoteSessionRefIdRef.current = null;
       setQuoteSubmitted(true);
@@ -1545,6 +1549,7 @@ export default function App() {
                   onClick={() => {
                     setShowPrices(false);
                     setSelectedDeductions([]);
+                    setSelectedExtraInstalls([]);
                   }}
                   className="px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold border transition cursor-pointer flex items-center gap-1.5 whitespace-nowrap bg-[#FC5716]/15 border-[#FC5716] text-[#FC5716]"
                 >
@@ -1656,6 +1661,10 @@ export default function App() {
                           setHasUserSelectedMakeModel(true);
                           if (activeSampleId !== null) {
                             const matchedSample = SAMPLE_TRUCKS.find((s) => s.makeModel === val);
+                            setAiGeneratedImage(null);
+                            setRenderedConfigKey(null);
+                            setIsQuoteFormOpen(false);
+                            setQuoteSubmitted(false);
                             if (matchedSample) {
                               setActiveSampleId(matchedSample.id);
                               setTruckYear(matchedSample.year);
@@ -1663,6 +1672,9 @@ export default function App() {
                               setUploadedAspectRatio(matchedSample.beforeImage.includes('stock_ram_2500') ? '3:2' : '16:9');
                               setWheelConfig(matchedSample.wheelConfig);
                               setBedLength(matchedSample.bedLength);
+                            } else {
+                              setActiveSampleId(null);
+                              setUploadedImage(null);
                             }
                           }
                         }}
@@ -2420,7 +2432,7 @@ export default function App() {
                         [
                           { id: 'after', shortLabel: 'After', fullSuffix: ' (AI Flatbed)' },
                           { id: 'before', shortLabel: 'Before', fullSuffix: ' (Original)' },
-                          { id: 'split', shortLabel: 'Side-by-Side', fullSuffix: '' }
+                          { id: 'split', shortLabel: 'Split', fullSuffix: '' }
                         ] as { id: 'after' | 'before' | 'split'; shortLabel: string; fullSuffix: string }[]
                       ).map((mode) => (
                         <button
@@ -2434,8 +2446,17 @@ export default function App() {
                               : 'text-gray-300 hover:text-white border border-transparent'
                           }`}
                         >
-                          <span>{mode.shortLabel}</span>
-                          {mode.fullSuffix && <span className="hidden sm:inline">{mode.fullSuffix}</span>}
+                          {mode.id === 'split' ? (
+                            <>
+                              <span className="min-[360px]:hidden">Split</span>
+                              <span className="hidden min-[360px]:inline">Side-by-Side</span>
+                            </>
+                          ) : (
+                            <>
+                              <span>{mode.shortLabel}</span>
+                              {mode.fullSuffix && <span className="hidden sm:inline">{mode.fullSuffix}</span>}
+                            </>
+                          )}
                         </button>
                       ))}
                     </div>
