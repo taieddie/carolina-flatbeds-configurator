@@ -14,7 +14,6 @@ class CfbVisualizerElement extends HTMLElement {
       const hostParams = new URLSearchParams(window.location.search);
       if (hostParams.get('test') === '1') embedUrl.searchParams.set('test', '1');
       if (hostParams.get('is_test') === '1') embedUrl.searchParams.set('is_test', '1');
-      if (hostParams.get('live') === '1') embedUrl.searchParams.set('live', '1');
     } catch {
       // Ignore cross-origin location read restrictions
     }

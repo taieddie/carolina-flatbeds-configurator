@@ -440,6 +440,7 @@ export default function App() {
 
     const rowMean = new Float32Array(h);
     const rowMaxChannelStd = new Float32Array(h);
+    const rowBlueExcess = new Float32Array(h);
     const rowEdgeEnergy = new Float32Array(h);
 
     const exStart = Math.floor(w * 0.12);
@@ -474,6 +475,7 @@ export default function App() {
 
       if (count > 0) {
         rowMean[y] = sumL / count;
+        rowBlueExcess[y] = (sumB - sumR) / count;
         const varR = Math.max(0, sumSqR / count - (sumR / count) ** 2);
         const varG = Math.max(0, sumSqG / count - (sumG / count) ** 2);
         const varB = Math.max(0, sumSqB / count - (sumB / count) ** 2);
@@ -524,7 +526,8 @@ export default function App() {
       let runBottomRow = anchorY;
       for (let y = anchorY; y >= 0; y--) {
         const meanDelta = y + 1 < h ? Math.abs(rowMean[y] - rowMean[y + 1]) : 0;
-        const isFlatUiRow = rowMaxChannelStd[y] < 6 && meanDelta < 2.5;
+        const isLikelyBlueSky = rowBlueExcess[y] > 18 && rowMean[y] > 95 && rowMean[y] < 230;
+        const isFlatUiRow = !isLikelyBlueSky && rowMaxChannelStd[y] < 6 && meanDelta < 2.5;
         if (isFlatUiRow) {
           if (flatRunUp === 0) runBottomRow = y;
           flatRunUp++;
@@ -541,7 +544,8 @@ export default function App() {
       let runTopRow = anchorY;
       for (let y = anchorY; y < h; y++) {
         const meanDelta = y > 0 ? Math.abs(rowMean[y] - rowMean[y - 1]) : 0;
-        const isFlatUiRow = rowMaxChannelStd[y] < 6 && meanDelta < 2.5;
+        const isLikelyBlueSky = rowBlueExcess[y] > 18 && rowMean[y] > 95 && rowMean[y] < 230;
+        const isFlatUiRow = !isLikelyBlueSky && rowMaxChannelStd[y] < 6 && meanDelta < 2.5;
         if (isFlatUiRow) {
           if (flatRunDown === 0) runTopRow = y;
           flatRunDown++;
@@ -818,6 +822,10 @@ export default function App() {
     quoteAbortRef.current?.abort();
     setUploadError(null);
     setAiError(null);
+    setAiGeneratedImage(null);
+    setRenderedConfigKey(null);
+    setIsQuoteFormOpen(false);
+    setQuoteSubmitted(false);
 
     if (file.size > 10 * 1024 * 1024) {
       setUploadError('Image size exceeds 10MB limit. Please upload a smaller photo.');
@@ -984,13 +992,6 @@ export default function App() {
     setQuoteSubmitted(false);
   };
 
-  // Always generate live via the Cloudflare Worker so every sample truck and custom upload
-  // reflects the latest DD Fab hardware references (reverse light bars, ddfab.co mudflaps)
-  // and returns a base64 AI preview attachment for quote emails.
-  const getExactPreRenderedSampleMatch = (): string | null => {
-    return null;
-  };
-
   // Step 3: Trigger AI Flatbed Generation
   const handleGenerateAiFlatbed = async () => {
     if (!uploadedImage) return;
@@ -1050,18 +1051,6 @@ export default function App() {
     };
 
     try {
-      // Fast path when sample truck matches an exact pre-verified render combination
-      const exactSampleMatch = getExactPreRenderedSampleMatch();
-      if (exactSampleMatch) {
-        await new Promise((r) => setTimeout(r, 1400));
-        clearProgressTimers();
-        if (reqId !== generateRequestIdRef.current) return;
-        setAiGeneratedImage(exactSampleMatch);
-        setRenderedConfigKey(currentConfigKey);
-        setRenderedSummaryLabel(`${bedStyleLabel} (${deckTypeLabel})`);
-        return;
-      }
-
       // Convert relative sample truck URL to base64 data URL so the Cloudflare Worker can always read it reliably
       let imagePayload = uploadedImage;
       if (uploadedImage.startsWith('./') || uploadedImage.startsWith('/')) {
@@ -1092,42 +1081,62 @@ export default function App() {
           ? 'dually-hd-skirt'
           : 'deluxe-skirted';
 
-      const response = await fetch('https://cfb-ai-generator.tek123168.workers.dev', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        signal: controller.signal,
-        body: JSON.stringify({
-          image: imagePayload,
-          modelId: legacyModelId,
-          truckYear,
-          truckMakeModel: resolvedTruckName,
-          wheelConfig,
-          isCustomUpload: activeSampleId === null,
-          explicitWheelConfig: showPrices,
-          aspectRatio: uploadedAspectRatio,
-          bedLength,
-          bedStyle,
-          deckType,
-          addOns: selectedAddOns,
-          dRingCount,
-          extraInstalls: selectedExtraInstalls,
-          debug: typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('live') === '1'
-        })
-      });
+      let response: Response | null = null;
+      let errMsg = 'AI generator is currently busy. Please click Generate AI Flatbed Preview to retry.';
+      for (let clientTry = 0; clientTry < 2; clientTry++) {
+        try {
+          response = await fetch('https://cfb-ai-generator.tek123168.workers.dev', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            signal: controller.signal,
+            body: JSON.stringify({
+              image: imagePayload,
+              modelId: legacyModelId,
+              truckYear,
+              truckMakeModel: resolvedTruckName,
+              wheelConfig,
+              isCustomUpload: activeSampleId === null,
+              explicitWheelConfig: showPrices,
+              aspectRatio: uploadedAspectRatio,
+              bedLength,
+              bedStyle,
+              deckType,
+              addOns: selectedAddOns,
+              dRingCount,
+              extraInstalls: selectedExtraInstalls
+            })
+          });
+        } catch (fetchErr: any) {
+          if (fetchErr?.name === 'AbortError' || controller.signal.aborted || reqId !== generateRequestIdRef.current) {
+            throw fetchErr;
+          }
+          response = null;
+          errMsg = fetchErr?.message || errMsg;
+          if (clientTry === 0) continue;
+          throw fetchErr;
+        }
+
+        if (reqId !== generateRequestIdRef.current || controller.signal.aborted) return;
+        if (response.ok) break;
+
+        try {
+          const errBody = await response.json();
+          if (errBody?.error) errMsg = errBody.error;
+        } catch {
+          // Use default message
+        }
+        if (clientTry === 0 && response.status >= 500) {
+          continue;
+        }
+        throw new Error(errMsg);
+      }
 
       clearProgressTimers();
 
       if (reqId !== generateRequestIdRef.current) return;
 
-      if (!response.ok) {
-        let serverMsg = 'AI generator is currently busy. Please click Generate AI Flatbed Preview to retry.';
-        try {
-          const errBody = await response.json();
-          if (errBody?.error) serverMsg = errBody.error;
-        } catch {
-          // Use default message
-        }
-        throw new Error(serverMsg);
+      if (!response || !response.ok) {
+        throw new Error(errMsg);
       }
 
       const data = await response.json();
@@ -1197,6 +1206,10 @@ export default function App() {
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
       setValidationError('Please enter a valid email address.');
+      return;
+    }
+    if (isTestMode && formData.email.trim().toLowerCase() !== 'taieddie8@gmail.com') {
+      setValidationError('Test Mode (?test=1) only accepts the authorized QA email (taieddie8@gmail.com). Remove ?test=1 from the URL to request a live quote.');
       return;
     }
 
