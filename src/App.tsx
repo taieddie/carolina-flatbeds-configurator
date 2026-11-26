@@ -401,8 +401,13 @@ export default function App() {
   const quoteAbortRef = useRef<AbortController | null>(null);
   const isSubmittingQuoteRef = useRef<boolean>(false);
   const quoteSessionRefIdRef = useRef<string | null>(null);
+  const qaTestToken =
+    typeof window !== 'undefined'
+      ? (window.sessionStorage?.getItem('cfb_qa_token') || '').trim()
+      : '';
   const isTestMode =
     typeof window !== 'undefined' &&
+    Boolean(qaTestToken) &&
     (new URLSearchParams(window.location.search).get('test') === '1' ||
       new URLSearchParams(window.location.search).get('is_test') === '1');
 
@@ -440,7 +445,6 @@ export default function App() {
 
     const rowMean = new Float32Array(h);
     const rowMaxChannelStd = new Float32Array(h);
-    const rowBlueExcess = new Float32Array(h);
     const rowEdgeEnergy = new Float32Array(h);
 
     const exStart = Math.floor(w * 0.12);
@@ -475,7 +479,6 @@ export default function App() {
 
       if (count > 0) {
         rowMean[y] = sumL / count;
-        rowBlueExcess[y] = (sumB - sumR) / count;
         const varR = Math.max(0, sumSqR / count - (sumR / count) ** 2);
         const varG = Math.max(0, sumSqG / count - (sumG / count) ** 2);
         const varB = Math.max(0, sumSqB / count - (sumB / count) ** 2);
@@ -526,8 +529,10 @@ export default function App() {
       let runBottomRow = anchorY;
       for (let y = anchorY; y >= 0; y--) {
         const meanDelta = y + 1 < h ? Math.abs(rowMean[y] - rowMean[y + 1]) : 0;
-        const isLikelyBlueSky = rowBlueExcess[y] > 18 && rowMean[y] > 95 && rowMean[y] < 230;
-        const isFlatUiRow = !isLikelyBlueSky && rowMaxChannelStd[y] < 6 && meanDelta < 2.5;
+        const isFlatUiRow =
+          (rowMean[y] < 38 || rowMean[y] > 242) &&
+          rowMaxChannelStd[y] < 5 &&
+          meanDelta < 2.0;
         if (isFlatUiRow) {
           if (flatRunUp === 0) runBottomRow = y;
           flatRunUp++;
@@ -544,8 +549,10 @@ export default function App() {
       let runTopRow = anchorY;
       for (let y = anchorY; y < h; y++) {
         const meanDelta = y > 0 ? Math.abs(rowMean[y] - rowMean[y - 1]) : 0;
-        const isLikelyBlueSky = rowBlueExcess[y] > 18 && rowMean[y] > 95 && rowMean[y] < 230;
-        const isFlatUiRow = !isLikelyBlueSky && rowMaxChannelStd[y] < 6 && meanDelta < 2.5;
+        const isFlatUiRow =
+          (rowMean[y] < 38 || rowMean[y] > 242) &&
+          rowMaxChannelStd[y] < 5 &&
+          meanDelta < 2.0;
         if (isFlatUiRow) {
           if (flatRunDown === 0) runTopRow = y;
           flatRunDown++;
@@ -816,16 +823,7 @@ export default function App() {
   const processImageFile = async (file: File) => {
     const uploadReqId = ++uploadRequestIdRef.current;
     setIsConvertingHeic(false);
-    generateAbortRef.current?.abort();
-    generateRequestIdRef.current += 1;
-    setIsAiGenerating(false);
-    quoteAbortRef.current?.abort();
     setUploadError(null);
-    setAiError(null);
-    setAiGeneratedImage(null);
-    setRenderedConfigKey(null);
-    setIsQuoteFormOpen(false);
-    setQuoteSubmitted(false);
 
     if (file.size > 10 * 1024 * 1024) {
       setUploadError('Image size exceeds 10MB limit. Please upload a smaller photo.');
@@ -844,6 +842,16 @@ export default function App() {
       if (fileInputRef.current) fileInputRef.current.value = '';
       return;
     }
+
+    generateAbortRef.current?.abort();
+    generateRequestIdRef.current += 1;
+    setIsAiGenerating(false);
+    quoteAbortRef.current?.abort();
+    setAiError(null);
+    setAiGeneratedImage(null);
+    setRenderedConfigKey(null);
+    setIsQuoteFormOpen(false);
+    setQuoteSubmitted(false);
 
     let sourceBlob: Blob = file;
     if (isHeic) {
@@ -883,20 +891,20 @@ export default function App() {
         if (uploadReqId !== uploadRequestIdRef.current) return;
         try {
           const canvas = document.createElement('canvas');
-          const maxDim = 1600;
+          const maxRawDim = 2400;
           let targetW = img.naturalWidth;
           let targetH = img.naturalHeight;
           if (targetW <= 0 || targetH <= 0) {
             setUploadError('Unable to process image file. Please try another JPG, PNG, or WebP photo.');
             return;
           }
-          if (targetW > maxDim || targetH > maxDim) {
+          if (targetW > maxRawDim || targetH > maxRawDim) {
             if (targetW > targetH) {
-              targetH = Math.round((targetH * maxDim) / targetW);
-              targetW = maxDim;
+              targetH = Math.round((targetH * maxRawDim) / targetW);
+              targetW = maxRawDim;
             } else {
-              targetW = Math.round((targetW * maxDim) / targetH);
-              targetH = maxDim;
+              targetW = Math.round((targetW * maxRawDim) / targetH);
+              targetH = maxRawDim;
             }
           }
           canvas.width = targetW;
@@ -910,9 +918,38 @@ export default function App() {
           ctx.fillRect(0, 0, targetW, targetH);
           ctx.drawImage(img, 0, 0, targetW, targetH);
           const normalizedCanvas = cropToLandscapeTruckFrame(canvas);
-          const normW = normalizedCanvas.width;
-          const normH = normalizedCanvas.height;
-          const sanitizedDataUrl = normalizedCanvas.toDataURL('image/jpeg', 0.92);
+          let exportCanvas = normalizedCanvas;
+          let normW = normalizedCanvas.width;
+          let normH = normalizedCanvas.height;
+          const maxExportDim = 1600;
+          if (normW > maxExportDim || normH > maxExportDim) {
+            let outW = normW;
+            let outH = normH;
+            if (outW > outH) {
+              outH = Math.round((outH * maxExportDim) / outW);
+              outW = maxExportDim;
+            } else {
+              outW = Math.round((outW * maxExportDim) / outH);
+              outH = maxExportDim;
+            }
+            const resizedCanvas = document.createElement('canvas');
+            resizedCanvas.width = outW;
+            resizedCanvas.height = outH;
+            const rCtx = resizedCanvas.getContext('2d');
+            if (rCtx) {
+              rCtx.fillStyle = '#ffffff';
+              rCtx.fillRect(0, 0, outW, outH);
+              rCtx.drawImage(normalizedCanvas, 0, 0, outW, outH);
+              exportCanvas = resizedCanvas;
+              normW = outW;
+              normH = outH;
+            }
+          }
+          const sanitizedDataUrl = exportCanvas.toDataURL('image/jpeg', 0.92);
+          if (exportCanvas !== normalizedCanvas) {
+            exportCanvas.width = 0;
+            exportCanvas.height = 0;
+          }
           if (normalizedCanvas !== canvas) {
             normalizedCanvas.width = 0;
             normalizedCanvas.height = 0;
@@ -1081,62 +1118,54 @@ export default function App() {
           ? 'dually-hd-skirt'
           : 'deluxe-skirted';
 
-      let response: Response | null = null;
-      let errMsg = 'AI generator is currently busy. Please click Generate AI Flatbed Preview to retry.';
-      for (let clientTry = 0; clientTry < 2; clientTry++) {
-        try {
-          response = await fetch('https://cfb-ai-generator.tek123168.workers.dev', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            signal: controller.signal,
-            body: JSON.stringify({
-              image: imagePayload,
-              modelId: legacyModelId,
-              truckYear,
-              truckMakeModel: resolvedTruckName,
-              wheelConfig,
-              isCustomUpload: activeSampleId === null,
-              explicitWheelConfig: showPrices,
-              aspectRatio: uploadedAspectRatio,
-              bedLength,
-              bedStyle,
-              deckType,
-              addOns: selectedAddOns,
-              dRingCount,
-              extraInstalls: selectedExtraInstalls
-            })
-          });
-        } catch (fetchErr: any) {
-          if (fetchErr?.name === 'AbortError' || controller.signal.aborted || reqId !== generateRequestIdRef.current) {
-            throw fetchErr;
-          }
-          response = null;
-          errMsg = fetchErr?.message || errMsg;
-          if (clientTry === 0) continue;
-          throw fetchErr;
+      let response: Response;
+      try {
+        response = await fetch('https://cfb-ai-generator.tek123168.workers.dev', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(isTestMode && qaTestToken ? { 'X-CFB-Test-Token': qaTestToken } : {})
+          },
+          signal: controller.signal,
+          body: JSON.stringify({
+            image: imagePayload,
+            modelId: legacyModelId,
+            truckYear,
+            truckMakeModel: resolvedTruckName,
+            wheelConfig,
+            isCustomUpload: activeSampleId === null,
+            explicitWheelConfig: showPrices,
+            aspectRatio: uploadedAspectRatio,
+            bedLength,
+            bedStyle,
+            deckType,
+            addOns: selectedAddOns,
+            dRingCount,
+            extraInstalls: selectedExtraInstalls,
+            ...(isTestMode && qaTestToken ? { debug: true } : {})
+          })
+        });
+      } catch (fetchErr: any) {
+        if (fetchErr?.name === 'AbortError' || controller.signal.aborted || reqId !== generateRequestIdRef.current) {
+          return;
         }
-
-        if (reqId !== generateRequestIdRef.current || controller.signal.aborted) return;
-        if (response.ok) break;
-
-        try {
-          const errBody = await response.json();
-          if (errBody?.error) errMsg = errBody.error;
-        } catch {
-          // Use default message
-        }
-        if (clientTry === 0 && response.status >= 500) {
-          continue;
-        }
-        throw new Error(errMsg);
+        clearProgressTimers();
+        setAiError('Could not reach the AI generator. Please check your connection and try again.');
+        return;
       }
 
       clearProgressTimers();
 
-      if (reqId !== generateRequestIdRef.current) return;
+      if (reqId !== generateRequestIdRef.current || controller.signal.aborted) return;
 
-      if (!response || !response.ok) {
-        throw new Error(errMsg);
+      if (!response.ok) {
+        const statusMsg =
+          response.status === 429
+            ? 'Too many previews requested from your connection. Please wait a few minutes and try again.'
+            : response.status === 400
+            ? 'Could not process this truck image. Please try another JPG, PNG, or WebP photo.'
+            : 'AI generator is currently busy. Please click Generate AI Flatbed Preview to retry.';
+        throw new Error(statusMsg);
       }
 
       const data = await response.json();
@@ -1147,13 +1176,15 @@ export default function App() {
         setRenderedConfigKey(currentConfigKey);
         setRenderedSummaryLabel(`${bedStyleLabel} (${deckTypeLabel})`);
       } else {
-        throw new Error(data.error || 'No image returned from AI generator. Please try again.');
+        throw new Error('No image returned from AI generator. Please try again.');
       }
     } catch (err: any) {
       clearProgressTimers();
       if (err?.name === 'AbortError' || reqId !== generateRequestIdRef.current) return;
       setAiError(
-        err.message || 'Could not complete AI preview. Please click Generate AI Flatbed Preview to retry.'
+        err instanceof Error && err.message
+          ? err.message
+          : 'Could not complete AI preview. Please click Generate AI Flatbed Preview to retry.'
       );
     } finally {
       if (reqId === generateRequestIdRef.current) {
@@ -1208,10 +1239,6 @@ export default function App() {
       setValidationError('Please enter a valid email address.');
       return;
     }
-    if (isTestMode && formData.email.trim().toLowerCase() !== 'taieddie8@gmail.com') {
-      setValidationError('Test Mode (?test=1) only accepts the authorized QA email (taieddie8@gmail.com). Remove ?test=1 from the URL to request a live quote.');
-      return;
-    }
 
     const refId = quoteSessionRefIdRef.current || createQuoteSessionRefId();
     quoteSessionRefIdRef.current = refId;
@@ -1235,6 +1262,20 @@ export default function App() {
     })`;
     setSubmittedSummaryText(summarySnapshot);
 
+    const includeExplicitWheelAndBed = showPrices || activeSampleId !== null;
+    const truckPayload = {
+      year: activeSampleId === null && !hasUserSelectedModel ? '' : truckYear,
+      makeModel:
+        activeSampleId === null && !hasUserSelectedModel
+          ? 'Custom Uploaded Truck'
+          : resolvedTruckName,
+      wheelConfig: includeExplicitWheelAndBed ? wheelConfig : '',
+      wheelConfigLabel: includeExplicitWheelAndBed ? wheelConfigLabel : '',
+      bedLength: includeExplicitWheelAndBed ? bedLength : '',
+      bedLengthLabel: includeExplicitWheelAndBed ? bedLengthLabel : '',
+      activeSampleId
+    };
+
     const inquiryPayload = {
       refId,
       submittedAt: new Date().toISOString(),
@@ -1245,15 +1286,7 @@ export default function App() {
         cityZip: formData.cityZip.trim(),
         notes: formData.notes.trim()
       },
-      truck: {
-        year: truckYear,
-        makeModel: resolvedTruckName,
-        wheelConfig,
-        wheelConfigLabel,
-        bedLength,
-        bedLengthLabel,
-        activeSampleId
-      },
+      truck: truckPayload,
       flatbedOptions: {
         bedStyle,
         bedStyleLabel,
@@ -1299,12 +1332,14 @@ export default function App() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-CFB-Test-Mode': isTestMode ? '1' : '0'
+          ...(isTestMode && qaTestToken
+            ? { 'X-CFB-Test-Mode': '1', 'X-CFB-Test-Token': qaTestToken }
+            : {})
         },
         signal: quoteController.signal,
         body: JSON.stringify({
           action: 'submit-quote',
-          isTest: isTestMode,
+          ...(isTestMode && qaTestToken ? { isTest: true } : {}),
           ...inquiryPayload
         })
       });
@@ -1314,7 +1349,11 @@ export default function App() {
         Array.isArray(resData?.skippedAttachments) && resData.skippedAttachments.length > 0;
       if (!res.ok || resData?.emailDelivered !== true || hasSkippedAttachments) {
         setValidationError(
-          resData?.error || 'Could not submit your quote right now. Please try submitting again in a moment.'
+          res.status === 429
+            ? 'Too many quote requests from your connection. Please wait a few minutes and try again.'
+            : res.status === 400
+            ? 'Please check your contact details and attached photos, then try again.'
+            : 'Could not submit your quote right now. Please try submitting again in a moment.'
         );
         return;
       }
@@ -1513,6 +1552,7 @@ export default function App() {
                               setActiveSampleId(matchedSample.id);
                               setUploadedImage(matchedSample.beforeImage);
                               setUploadedAspectRatio(matchedSample.beforeImage.includes('stock_ram_2500') ? '3:2' : '16:9');
+                              setWheelConfig(matchedSample.wheelConfig);
                               setBedLength(matchedSample.bedLength);
                             }
                           }
@@ -2284,7 +2324,7 @@ export default function App() {
 
                   {/* Live AI Render Viewport (Zero Cropping across 4:3, 16:10, and 16:9 Truck Photos) */}
                   {aiGeneratedImage && !isAiGenerating && previewViewMode === 'split' ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
+                    <div className="grid grid-cols-2 gap-2 sm:gap-3 w-full">
                       <div className="relative rounded-xl overflow-hidden border border-[#2e2e2e] bg-[#0a0a0a] flex items-center justify-center">
                         <img
                           src={uploadedImage || ''}
@@ -2497,7 +2537,7 @@ export default function App() {
                     <div className={aiGeneratedImage ? 'grid grid-cols-1 sm:grid-cols-2 gap-2.5' : ''}>
                       <button
                         type="button"
-                        disabled={!uploadedImage || isAiGenerating}
+                        disabled={!uploadedImage || isAiGenerating || isConvertingHeic}
                         onClick={handleGenerateAiFlatbed}
                         className={`w-full py-3.5 px-4 rounded-xl font-heading font-bold text-base tracking-wide transition flex items-center justify-center gap-2 cursor-pointer ${
                           aiGeneratedImage && !isRenderOutdated
