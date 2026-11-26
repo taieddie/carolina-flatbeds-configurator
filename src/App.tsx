@@ -372,7 +372,8 @@ export default function App() {
   const [aiError, setAiError] = useState<string | null>(null);
   const [previewViewMode, setPreviewViewMode] = useState<'after' | 'before' | 'split'>('after');
   const [uploadedAspectRatio, setUploadedAspectRatio] = useState<string>('16:9');
-  const [hasUserSelectedModel, setHasUserSelectedModel] = useState<boolean>(false);
+  const [hasUserSelectedMakeModel, setHasUserSelectedMakeModel] = useState<boolean>(false);
+  const [hasUserSelectedYear, setHasUserSelectedYear] = useState<boolean>(false);
   const [isConvertingHeic, setIsConvertingHeic] = useState<boolean>(false);
   const [isProcessingUpload, setIsProcessingUpload] = useState<boolean>(false);
 
@@ -526,19 +527,23 @@ export default function App() {
         }
       }
 
+      let darkTop = 0;
+      let darkBottom = h - 1;
+      let foundDark = false;
       let flatRunUp = 0;
       let runBottomRow = anchorY;
       for (let y = anchorY; y >= 0; y--) {
         const meanDelta = y + 1 < h ? Math.abs(rowMean[y] - rowMean[y + 1]) : 0;
-        const isFlatUiRow =
+        const isDarkFlatRow =
           rowMean[y] < 36 &&
           rowMaxChannelStd[y] < 5 &&
           meanDelta < 2.0;
-        if (isFlatUiRow) {
+        if (isDarkFlatRow) {
           if (flatRunUp === 0) runBottomRow = y;
           flatRunUp++;
           if (flatRunUp >= 8) {
-            yTop = Math.min(runBottomRow + 1, anchorY);
+            darkTop = Math.min(runBottomRow + 1, anchorY);
+            foundDark = true;
             break;
           }
         } else {
@@ -550,20 +555,83 @@ export default function App() {
       let runTopRow = anchorY;
       for (let y = anchorY; y < h; y++) {
         const meanDelta = y > 0 ? Math.abs(rowMean[y] - rowMean[y - 1]) : 0;
-        const isFlatUiRow =
+        const isDarkFlatRow =
           rowMean[y] < 36 &&
           rowMaxChannelStd[y] < 5 &&
           meanDelta < 2.0;
-        if (isFlatUiRow) {
+        if (isDarkFlatRow) {
           if (flatRunDown === 0) runTopRow = y;
           flatRunDown++;
           if (flatRunDown >= 8) {
-            yBottom = Math.max(runTopRow - 1, anchorY);
+            darkBottom = Math.max(runTopRow - 1, anchorY);
+            foundDark = true;
             break;
           }
         } else {
           flatRunDown = 0;
         }
+      }
+
+      // Paired light-mode UI/letterbox detection: trim only when BOTH top and bottom light flat UI bands exist
+      // so bright overcast sky in a real outdoor truck photo is never clipped.
+      let lightTop = 0;
+      let lightBottom = h - 1;
+      let foundLightTop = false;
+      let foundLightBottom = false;
+      let lightRunUp = 0;
+      let lightRunBottomRow = anchorY;
+      for (let y = anchorY; y >= 0; y--) {
+        const meanDelta = y + 1 < h ? Math.abs(rowMean[y] - rowMean[y + 1]) : 0;
+        const isLightFlatRow =
+          rowMean[y] > 228 &&
+          rowMaxChannelStd[y] < 4.5 &&
+          meanDelta < 2.0 &&
+          rowEdgeEnergy[y] < 3.5;
+        if (isLightFlatRow) {
+          if (lightRunUp === 0) lightRunBottomRow = y;
+          lightRunUp++;
+          if (lightRunUp >= 10) {
+            lightTop = Math.min(lightRunBottomRow + 1, anchorY);
+            foundLightTop = true;
+            break;
+          }
+        } else {
+          lightRunUp = 0;
+        }
+      }
+
+      let lightRunDown = 0;
+      let lightRunTopRow = anchorY;
+      for (let y = anchorY; y < h; y++) {
+        const meanDelta = y > 0 ? Math.abs(rowMean[y] - rowMean[y - 1]) : 0;
+        const isLightFlatRow =
+          rowMean[y] > 228 &&
+          rowMaxChannelStd[y] < 4.5 &&
+          meanDelta < 2.0 &&
+          rowEdgeEnergy[y] < 3.5;
+        if (isLightFlatRow) {
+          if (lightRunDown === 0) lightRunTopRow = y;
+          lightRunDown++;
+          if (lightRunDown >= 10) {
+            lightBottom = Math.max(lightRunTopRow - 1, anchorY);
+            foundLightBottom = true;
+            break;
+          }
+        } else {
+          lightRunDown = 0;
+        }
+      }
+
+      if (
+        foundLightTop &&
+        foundLightBottom &&
+        lightBottom - lightTop + 1 >= Math.round(w * 0.42)
+      ) {
+        yTop = lightTop;
+        yBottom = lightBottom;
+      } else if (foundDark && darkBottom - darkTop + 1 >= Math.round(w * 0.42)) {
+        yTop = darkTop;
+        yBottom = darkBottom;
       }
     }
 
@@ -636,9 +704,15 @@ export default function App() {
       : truckMakeModel;
 
   const displayTruckLabel =
-    activeSampleId === null && !hasUserSelectedModel
-      ? 'Custom Uploaded Truck'
-      : `${truckYear} ${resolvedTruckName}`;
+    activeSampleId !== null
+      ? `${truckYear} ${resolvedTruckName}`
+      : hasUserSelectedMakeModel && hasUserSelectedYear
+      ? `${truckYear} ${resolvedTruckName}`
+      : hasUserSelectedMakeModel
+      ? resolvedTruckName
+      : hasUserSelectedYear
+      ? `${truckYear} Custom Uploaded Truck`
+      : 'Custom Uploaded Truck';
 
   const wheelConfigLabel =
     wheelConfig === 'srw'
@@ -653,7 +727,7 @@ export default function App() {
   const deckTypeLabel =
     deckType === 'wood' ? 'Wood Deck' : deckType === 'trex' ? 'Trex Deck' : 'Steel Deck';
 
-  const currentConfigKey = `${uploadedImage || ''}|${truckYear}|${resolvedTruckName}|${wheelConfig}|${bedLength}|${bedStyle}|${deckType}|${dRingCount}|${selectedAddOns.slice().sort().join(',')}|${selectedExtraInstalls.slice().sort().join(',')}|${selectedDeductions.slice().sort().join(',')}`;
+  const currentConfigKey = `${uploadedImage || ''}|${displayTruckLabel}|${wheelConfig}|${bedLength}|${bedStyle}|${deckType}|${dRingCount}|${selectedAddOns.slice().sort().join(',')}|${selectedExtraInstalls.slice().sort().join(',')}|${selectedDeductions.slice().sort().join(',')}`;
   const isRenderOutdated = Boolean(
     aiGeneratedImage && (!renderedConfigKey || renderedConfigKey !== currentConfigKey)
   );
@@ -718,7 +792,11 @@ export default function App() {
 
     // Tacoma deduction (-$275 on Standard Model per PDF Table 2)
     const tacomaDeduction =
-      bedStyle === 'standard' && truckMakeModel === 'Toyota Tacoma' ? 275 : 0;
+      bedStyle === 'standard' &&
+      (activeSampleId !== null || hasUserSelectedMakeModel) &&
+      truckMakeModel === 'Toyota Tacoma'
+        ? 275
+        : 0;
 
     let addOnsTotal = 0;
     const itemizedAddOns: { label: string; price: number }[] = [];
@@ -968,7 +1046,6 @@ export default function App() {
           generateRequestIdRef.current += 1;
           setIsAiGenerating(false);
           setUploadedAspectRatio(computeClosestAspectRatio(normW, normH));
-          setHasUserSelectedModel(false);
           setUploadedImage(sanitizedDataUrl);
           setActiveSampleId(null);
           setAiGeneratedImage(null);
@@ -1021,7 +1098,8 @@ export default function App() {
     setAiError(null);
     setActiveSampleId(sample.id);
     setUploadedImage(sample.beforeImage);
-    setHasUserSelectedModel(true);
+    setHasUserSelectedMakeModel(false);
+    setHasUserSelectedYear(false);
     setUploadedAspectRatio(sample.beforeImage.includes('stock_ram_2500') ? '3:2' : '16:9');
     setTruckYear(sample.year);
     setTruckMakeModel(sample.makeModel);
@@ -1141,11 +1219,11 @@ export default function App() {
           body: JSON.stringify({
             image: imagePayload,
             modelId: legacyModelId,
-            truckYear: activeSampleId !== null || hasUserSelectedModel ? truckYear : '',
-            truckMakeModel: activeSampleId !== null || hasUserSelectedModel ? resolvedTruckName : '',
+            truckYear: activeSampleId !== null || hasUserSelectedYear ? truckYear : '',
+            truckMakeModel: activeSampleId !== null || hasUserSelectedMakeModel ? resolvedTruckName : '',
             wheelConfig: showPrices || activeSampleId !== null ? wheelConfig : 'srw',
             isCustomUpload: activeSampleId === null,
-            hasUserSelectedModel,
+            hasUserSelectedModel: hasUserSelectedMakeModel,
             explicitWheelConfig: showPrices,
             aspectRatio: uploadedAspectRatio,
             bedLength: showPrices || activeSampleId !== null ? bedLength : '',
@@ -1276,11 +1354,11 @@ export default function App() {
 
     const includeExplicitWheelAndBed = showPrices || activeSampleId !== null;
     const truckPayload = {
-      year: activeSampleId === null && !hasUserSelectedModel ? '' : truckYear,
+      year: activeSampleId !== null || hasUserSelectedYear ? truckYear : '',
       makeModel:
-        activeSampleId === null && !hasUserSelectedModel
-          ? 'Custom Uploaded Truck'
-          : resolvedTruckName,
+        activeSampleId !== null || hasUserSelectedMakeModel
+          ? resolvedTruckName
+          : 'Custom Uploaded Truck',
       wheelConfig: includeExplicitWheelAndBed ? wheelConfig : '',
       wheelConfigLabel: includeExplicitWheelAndBed ? wheelConfigLabel : '',
       bedLength: includeExplicitWheelAndBed ? bedLength : '',
@@ -1553,11 +1631,15 @@ export default function App() {
                       </label>
                       <select
                         id="truck-make-model"
-                        value={truckMakeModel}
+                        value={activeSampleId === null && !hasUserSelectedMakeModel ? '__auto__' : truckMakeModel}
                         onChange={(e) => {
                           const val = e.target.value;
+                          if (val === '__auto__') {
+                            setHasUserSelectedMakeModel(false);
+                            return;
+                          }
                           setTruckMakeModel(val);
-                          setHasUserSelectedModel(true);
+                          setHasUserSelectedMakeModel(true);
                           if (activeSampleId !== null) {
                             const matchedSample = SAMPLE_TRUCKS.find((s) => s.makeModel === val);
                             if (matchedSample) {
@@ -1571,6 +1653,9 @@ export default function App() {
                         }}
                         className="w-full bg-[#1a1a1a] border border-[#333333] focus:border-[#FC5716] rounded-lg px-3.5 py-2.5 text-sm text-white font-medium outline-none transition"
                       >
+                        {activeSampleId === null && (
+                          <option value="__auto__">Auto-detect from uploaded photo</option>
+                        )}
                         {TRUCK_MAKE_MODELS.map((item) => (
                           <option key={item} value={item}>
                             {item}
@@ -1588,13 +1673,19 @@ export default function App() {
                       </label>
                       <select
                         id="truck-year"
-                        value={truckYear}
+                        value={activeSampleId === null && !hasUserSelectedYear ? '__auto__' : truckYear}
                         onChange={(e) => {
-                          setTruckYear(e.target.value);
-                          setHasUserSelectedModel(true);
+                          const yr = e.target.value;
+                          if (yr === '__auto__') {
+                            setHasUserSelectedYear(false);
+                            return;
+                          }
+                          setTruckYear(yr);
+                          setHasUserSelectedYear(true);
                         }}
                         className="w-full bg-[#1a1a1a] border border-[#333333] focus:border-[#FC5716] rounded-lg px-3.5 py-2.5 text-sm text-white font-medium outline-none transition"
                       >
+                        {activeSampleId === null && <option value="__auto__">Auto</option>}
                         {TRUCK_YEARS.map((yr) => (
                           <option key={yr} value={yr}>
                             {yr}
@@ -1604,7 +1695,7 @@ export default function App() {
                     </div>
                   </div>
 
-                  {truckMakeModel === 'Other / Custom Model' && (
+                  {truckMakeModel === 'Other / Custom Model' && (activeSampleId !== null || hasUserSelectedMakeModel) && (
                     <div className="mt-3.5">
                       <label
                         htmlFor="custom-truck-input"
@@ -2322,7 +2413,7 @@ export default function App() {
                           type="button"
                           aria-pressed={previewViewMode === mode.id}
                           onClick={() => setPreviewViewMode(mode.id)}
-                          className={`flex-1 py-1.5 px-2 rounded-md text-xs font-semibold transition cursor-pointer text-center ${
+                          className={`flex-1 py-1.5 px-1.5 sm:px-2 rounded-md text-[11px] sm:text-xs font-semibold transition cursor-pointer text-center whitespace-nowrap ${
                             previewViewMode === mode.id
                               ? 'bg-[#261c17] text-[#FC5716] border border-[#FC5716]/60 font-bold shadow'
                               : 'text-gray-300 hover:text-white border border-transparent'
