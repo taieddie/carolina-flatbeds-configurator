@@ -872,7 +872,7 @@ export default function App() {
 
   // Toggle visual add-on selection (enforcing mutually exclusive rear fender variations per Table 1)
   const toggleAddOn = (addon: AddOnOption) => {
-    if (showPrices) {
+    if (showPrices || activeSampleId !== null) {
       if (addon.bedRestriction === 'long-only' && bedLength !== 'long') return;
       if (addon.bedRestriction === 'short-only' && bedLength !== 'short') return;
     } else {
@@ -1125,6 +1125,30 @@ export default function App() {
     setQuoteSubmitted(false);
   };
 
+  // Convert relative sample truck URL to base64 data URL so the Cloudflare Worker can attach or process it reliably
+  const resolveImagePayloadDataUrl = async (src: string | null): Promise<string | null> => {
+    if (!src) return null;
+    if (src.startsWith('data:')) return src;
+    if (src.startsWith('./') || src.startsWith('/')) {
+      try {
+        const imgResp = await fetch(src);
+        if (imgResp.ok) {
+          const blob = await imgResp.blob();
+          return await new Promise<string>((resolve, reject) => {
+            const r = new FileReader();
+            r.onloadend = () => resolve(r.result as string);
+            r.onerror = reject;
+            r.readAsDataURL(blob);
+          });
+        }
+      } catch {
+        // Fallback to absolute URL below
+      }
+      return new URL(src.replace('./', ''), window.location.href).href;
+    }
+    return src;
+  };
+
   // Step 3: Trigger AI Flatbed Generation
   const handleGenerateAiFlatbed = async () => {
     if (!uploadedImage || isProcessingUpload || isConvertingHeic) return;
@@ -1184,26 +1208,7 @@ export default function App() {
     };
 
     try {
-      // Convert relative sample truck URL to base64 data URL so the Cloudflare Worker can always read it reliably
-      let imagePayload = uploadedImage;
-      if (uploadedImage.startsWith('./') || uploadedImage.startsWith('/')) {
-        try {
-          const imgResp = await fetch(uploadedImage);
-          if (imgResp.ok) {
-            const blob = await imgResp.blob();
-            imagePayload = await new Promise<string>((resolve, reject) => {
-              const r = new FileReader();
-              r.onloadend = () => resolve(r.result as string);
-              r.onerror = reject;
-              r.readAsDataURL(blob);
-            });
-          } else {
-            imagePayload = new URL(uploadedImage.replace('./', ''), window.location.href).href;
-          }
-        } catch {
-          imagePayload = new URL(uploadedImage.replace('./', ''), window.location.href).href;
-        }
-      }
+      const imagePayload = (await resolveImagePayloadDataUrl(uploadedImage)) || uploadedImage;
 
       const legacyModelId =
         bedStyle === 'standard'
@@ -1380,47 +1385,50 @@ export default function App() {
       activeSampleId
     };
 
-    const inquiryPayload = {
-      refId,
-      submittedAt: new Date().toISOString(),
-      customer: {
-        name: formData.name.trim(),
-        phone: formData.phone.trim(),
-        email: formData.email.trim(),
-        cityZip: formData.cityZip.trim(),
-        notes: formData.notes.trim()
-      },
-      truck: truckPayload,
-      flatbedOptions: {
-        bedStyle,
-        bedStyleLabel,
-        deckType,
-        deckTypeLabel,
-        addOns: selectedAddOns,
-        addOnLabels: selectedAddOnNames,
-        dRingCount,
-        extraInstalls: selectedExtraInstalls,
-        deductions: showPrices ? selectedDeductions : [],
-        deductionLabels: showPrices ? selectedDeductionNames : [],
-        priceBreakdown: {
-          basePrice: priceBreakdown.basePrice,
-          installPrice: priceBreakdown.installPrice,
-          addOnsTotal: priceBreakdown.addOnsTotal,
-          tacomaDeduction: priceBreakdown.tacomaDeduction,
-          totalDeductions: priceBreakdown.totalDeductions,
-          totalInstalled: priceBreakdown.totalInstalled
-        }
-      },
-      aiPreviewImage: isRenderOutdated ? null : aiGeneratedImage,
-      uploadedTruckImage: uploadedImage
-    };
-
     quoteAbortRef.current?.abort();
     const quoteController = new AbortController();
     quoteAbortRef.current = quoteController;
     isSubmittingQuoteRef.current = true;
     setIsSubmittingQuote(true);
     try {
+      const resolvedUploadedTruckImage = await resolveImagePayloadDataUrl(uploadedImage);
+      if (quoteController.signal.aborted) return;
+
+      const inquiryPayload = {
+        refId,
+        submittedAt: new Date().toISOString(),
+        customer: {
+          name: formData.name.trim(),
+          phone: formData.phone.trim(),
+          email: formData.email.trim(),
+          cityZip: formData.cityZip.trim(),
+          notes: formData.notes.trim()
+        },
+        truck: truckPayload,
+        flatbedOptions: {
+          bedStyle,
+          bedStyleLabel,
+          deckType,
+          deckTypeLabel,
+          addOns: selectedAddOns,
+          addOnLabels: selectedAddOnNames,
+          dRingCount,
+          extraInstalls: selectedExtraInstalls,
+          deductions: showPrices ? selectedDeductions : [],
+          deductionLabels: showPrices ? selectedDeductionNames : [],
+          priceBreakdown: {
+            basePrice: priceBreakdown.basePrice,
+            installPrice: priceBreakdown.installPrice,
+            addOnsTotal: priceBreakdown.addOnsTotal,
+            tacomaDeduction: priceBreakdown.tacomaDeduction,
+            totalDeductions: priceBreakdown.totalDeductions,
+            totalInstalled: priceBreakdown.totalInstalled
+          }
+        },
+        aiPreviewImage: isRenderOutdated ? null : aiGeneratedImage,
+        uploadedTruckImage: resolvedUploadedTruckImage
+      };
+
       const res = await fetch('https://cfb-ai-generator.tek123168.workers.dev', {
         method: 'POST',
         headers: {
@@ -1450,16 +1458,6 @@ export default function App() {
             : 'Could not submit your quote right now. Please try submitting again in a moment.'
         );
         return;
-      }
-      try {
-        const existing = JSON.parse(localStorage.getItem('cfb_quote_inquiries') || '[]');
-        const { aiPreviewImage: _a, uploadedTruckImage: _u, ...lightweightInquiry } = inquiryPayload;
-        localStorage.setItem(
-          'cfb_quote_inquiries',
-          JSON.stringify([lightweightInquiry, ...existing.slice(0, 29)])
-        );
-      } catch {
-        // Ignore storage quota errors
       }
       quoteSessionRefIdRef.current = null;
       setQuoteSubmitted(true);
@@ -1660,6 +1658,10 @@ export default function App() {
                           setTruckMakeModel(val);
                           setHasUserSelectedMakeModel(true);
                           if (activeSampleId !== null) {
+                            generateAbortRef.current?.abort();
+                            generateRequestIdRef.current += 1;
+                            setIsAiGenerating(false);
+                            setAiError(null);
                             const matchedSample = SAMPLE_TRUCKS.find((s) => s.makeModel === val);
                             setAiGeneratedImage(null);
                             setRenderedConfigKey(null);
@@ -2171,7 +2173,7 @@ export default function App() {
                   {visibleVisualAddOns.map((addon) => {
                     const isSelected = selectedAddOns.includes(addon.id);
                     const isDisabledByBed =
-                      showPrices &&
+                      (showPrices || activeSampleId !== null) &&
                       ((addon.bedRestriction === 'long-only' && bedLength !== 'long') ||
                         (addon.bedRestriction === 'short-only' && bedLength !== 'short'));
                     const thumbSrc =
